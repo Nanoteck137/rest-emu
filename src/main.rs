@@ -215,6 +215,83 @@ impl From<u32> for IType {
     }
 }
 
+#[derive(Debug)]
+struct SType {
+    imm: i32,
+    funct3: u32,
+    rs1: Register,
+    rs2: Register
+}
+
+impl From<u32> for SType {
+    fn from(value: u32) -> Self {
+        let imm115 = (value >> 25) & 0b1111111;
+        let imm40 = (value >> 7) & 0b11111;
+
+        let imm = (imm115 << 5) | imm40;
+        let imm = ((imm as i32) << 20) >> 20;
+
+        let funct3 = (value >> 12) & 0b111;
+        let rs1 = Register::from((value >> 15) & 0b11111);
+        let rs2 = Register::from((value >> 20) & 0b11111);
+
+        Self {
+            imm,
+            funct3,
+            rs1,
+            rs2
+        }
+    }
+}
+
+#[derive(Debug)]
+struct UType {
+    imm: i32,
+    rd: Register,
+}
+
+impl From<u32> for UType {
+    fn from(value: u32) -> Self {
+        let imm = (value & !0xfff) as i32;
+        let rd = Register::from((value >> 7) & 0b11111);
+
+        Self {
+            imm,
+            rd
+        }
+    }
+}
+
+#[derive(Debug)]
+struct RType {
+    funct7: u32,
+    funct3: u32,
+    rd: Register,
+    rs1: Register,
+    rs2: Register,
+}
+
+impl From<u32> for RType {
+    fn from(value: u32) -> Self {
+        let funct7 = (value >> 25) & 0b1111111;
+
+        let rs2 = Register::from((value >> 20) & 0b11111);
+        let rs1 = Register::from((value >> 15) & 0b11111);
+
+        let funct3 = (value >> 12) & 0b111;
+
+        let rd = Register::from((value >> 7) & 0b11111);
+
+        Self {
+            funct7,
+            funct3,
+            rd,
+            rs1,
+            rs2
+        }
+    }
+}
+
 struct Core {
     registers: [u64; NUM_REGISTERS],
 
@@ -231,10 +308,93 @@ impl Core {
     }
 
     fn step(&mut self) {
+        let current_pc = self.reg(Register::Pc);
+
         let inst = self.fetch_u32();
         let opcode = inst & 0b1111111;
 
         match opcode {
+            0b0110111 => {
+                // LUI
+
+                let inst = UType::from(inst);
+                println!("Inst: {:#x?}", inst);
+
+                self.set_reg(inst.rd, inst.imm as i64 as u64);
+            }
+
+            0b1100111 => {
+                // JALR
+
+                let inst = IType::from(inst);
+                println!("Inst: {:#x?}", inst);
+
+                let target = self.reg(inst.rs1)
+                    .wrapping_add(inst.imm as i64 as u64);
+
+                let return_addr = self.reg(Register::Pc);
+                self.set_reg(inst.rd, return_addr);
+                self.set_reg(Register::Pc, target);
+            }
+
+            0b0000011 => {
+                let inst = IType::from(inst);
+
+                let addr = self.reg(inst.rs1)
+                    .wrapping_add(inst.imm as i64 as u64);
+
+                match inst.funct3 {
+                    0b010 => {
+                        // LW
+
+                        let val = self.mmu.read_u32(addr);
+                        self.set_reg(inst.rd, val as i64 as u64);
+                    }
+
+                    0b110 => {
+                        // LWU
+
+                        let val = self.mmu.read_u32(addr);
+                        self.set_reg(inst.rd, val as u64)
+                    }
+
+                    0b011 => {
+                        // LD
+                        let val = self.mmu.read_u64(addr);
+                        self.set_reg(inst.rd, val as i64 as u64);
+                    }
+
+                    _ => panic!("Unimplemented funct3 '0b{:03b}' at 0x{:016x}",
+                                inst.funct3, current_pc),
+                }
+            }
+
+            0b0100011 => {
+                let inst = SType::from(inst);
+
+                let addr = self.reg(inst.rs1)
+                    .wrapping_add(inst.imm as i64 as u64);
+                println!("Address: {:#x?}", addr);
+
+                match inst.funct3 {
+                    0b010 => {
+                        // SW
+
+                        let val = self.reg(inst.rs2) as u32;
+                        self.mmu.write_u32(addr, val);
+                    }
+
+                    0b011 => {
+                        // SD
+                        let val = self.reg(inst.rs2);
+                        self.mmu.write_u64(addr, val);
+                    }
+
+                    _ => panic!("Unimplemented funct3 '0b{:03b}' at 0x{:016x}",
+                                inst.funct3, current_pc),
+                }
+            },
+
             0b0010011 => {
                 let inst = IType::from(inst);
                 println!("Instruction: {:#x?}", inst);
@@ -242,18 +402,56 @@ impl Core {
                 match inst.funct3 {
                     0b000 => {
                         // ADDI
-
                         let imm = inst.imm as i64 as u64;
                         let rs1 = self.reg(inst.rs1);
                         self.set_reg(inst.rd, rs1.wrapping_add(imm));
                     }
-                    _ => panic!("Unimplemented funct3 '0b{:03b}'", inst.funct3),
+                    _ => panic!("Unimplemented funct3 '0b{:03b}' at 0x{:016x}",
+                                inst.funct3, current_pc),
                 }
             }
 
-            _ => panic!("Unknown opcode '{:#b}'", opcode),
+            0b0011011 => {
+                let inst = IType::from(inst);
+
+                match inst.funct3 {
+                    0b000 => {
+                        // ADDIW
+
+                        let rs1 = self.reg(inst.rs1) as u32;
+                        let imm = inst.imm as u32;
+
+                        let val = rs1.wrapping_add(imm) as i32 as i64 as u64;
+                        self.set_reg(inst.rd, val);
+                    }
+                    _ => panic!("Unimplemented funct3 '0b{:03b}' at 0x{:016x}",
+                                inst.funct3, current_pc),
+                }
+            }
+
+            0b0111011 => {
+                let inst = RType::from(inst);
+
+                let rs1 = self.reg(inst.rs1) as u32;
+                let rs2 = self.reg(inst.rs2) as u32;
+
+                match (inst.funct7, inst.funct3) {
+                    (0b0000000, 0b000) => {
+                        // ADDW
+
+                        let value = rs1.wrapping_add(rs2);
+                        self.set_reg(inst.rd, value as i32 as i64 as u64);
+                    }
+
+                    _ => panic!("Unimplemented funct3 '0b{:03b}' funct7 '0b{:07b} at 0x{:016x}",
+                                inst.funct3, inst.funct7, current_pc),
+                }
+            }
+
+            _ => panic!("Unknown opcode '0b{:07b}' at 0x{:016x}",
+                        opcode, current_pc),
         }
-        println!("Executing inst: {:#x} Opcode: {:#b}", inst, opcode);
+        println!("Executing inst: {:#x} Opcode: 0b{:07b}", inst, opcode);
     }
 
     fn fetch_u32(&mut self) -> u32 {
@@ -329,9 +527,16 @@ fn main() {
     load_binary_program(&mut mmu);
 
     let mut core = Core::new(mmu);
+    core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
-    core.step();
+    loop {
+        core.step();
+
+        if core.reg(Register::Pc) == 0xffff1337 {
+            break;
+        }
+    }
 
     println!("{:#x?}", core);
 }
