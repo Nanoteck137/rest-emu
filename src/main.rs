@@ -287,7 +287,7 @@ impl From<u32> for BType {
         let imm41 = (value >> 8) & 0b1111;
         let imm11 = (value >> 7) & 0b1;
 
-        let imm = (imm12 >> 12) | (imm11 << 11) | (imm105 << 5) | (imm41 << 1);
+        let imm = (imm12 << 12) | (imm11 << 11) | (imm105 << 5) | (imm41 << 1);
         let imm = ((imm as i32) << 19) >> 19;
 
         let rs1 = Register::from((value >> 20) & 0b11111);
@@ -397,12 +397,71 @@ impl Core {
                 self.set_reg(Register::Pc, target);
             },
 
-            // Beq { rs1: Register, rs2: Register, imm: i32 } => {},
-            // Bne { rs1: Register, rs2: Register, imm: i32 } => {},
-            // Blt { rs1: Register, rs2: Register, imm: i32 } => {},
-            // Bge { rs1: Register, rs2: Register, imm: i32 } => {},
-            // Bltu { rs1: Register, rs2: Register, imm: i32 } => {},
-            // Bgeu { rs1: Register, rs2: Register, imm: i32 } => {},
+            Instruction::Beq { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 == rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
+
+            Instruction::Bne { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 != rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
+
+            Instruction::Blt { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2) as i64;
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 < rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
+
+            Instruction::Bge { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2) as i64;
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 >= rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
+
+            Instruction::Bltu { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 < rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
+
+            Instruction::Bgeu { rs1, rs2, imm } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+                let imm = imm as i64 as u64;
+                let target = current_pc.wrapping_add(imm);
+
+                if rs1 >= rs2 {
+                    self.set_reg(Register::Pc, target);
+                }
+            },
 
             Instruction::Lb { rd, rs1, imm } => {
                 let addr = self.reg(rs1)
@@ -1413,7 +1472,16 @@ fn main() {
     core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
+    let a = 5;
+    let b = 6;
+
+    core.set_reg(Register::A0, a);
+    core.set_reg(Register::A1, b);
+
     loop {
+        use std::io::Read;
+        // std::io::stdin().read(&mut [0u8]).unwrap();
+
         core.step();
 
         if core.reg(Register::Pc) == 0xffff1337 {
@@ -1422,4 +1490,13 @@ fn main() {
     }
 
     println!("{:#x?}", core);
+
+    let value = core.reg(Register::A0);
+    match value {
+        1 => println!("{} == {} Rust: {}", a, b, a == b),
+        2 => println!("{} > {} Rust: {}", a, b, a > b),
+        3 => println!("{} < {} Rust: {}", a, b, a < b),
+
+        _ => println!("Value: {}", value),
+    }
 }

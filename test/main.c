@@ -1,9 +1,15 @@
 #include <stdint.h>
 
-int32_t _start() {
-    int32_t a = 0b10000;
-    int32_t b = 3;
-    int32_t c = a >> b;
+int _start(int number1, int number2) {
+    if(number1 == number2) {
+        return 1;
+    }
+    else if (number1 > number2) {
+        return 2;
+    }
+    else {
+        return 3;
+    }
 
-    return c;
+    return 0;
 }
