@@ -1,8 +1,6 @@
 //! Rest-EMU is a RISC-V emulator so we can emulate and define a custom
 //! RISC-V cpu
 
-#![allow(dead_code)]
-
 struct Mmu {
     ram: Vec<u8>,
 }
@@ -191,6 +189,36 @@ impl From<u32> for Register {
 }
 
 #[derive(Debug)]
+struct RType {
+    funct7: u32,
+    funct3: u32,
+    rd: Register,
+    rs1: Register,
+    rs2: Register,
+}
+
+impl From<u32> for RType {
+    fn from(value: u32) -> Self {
+        let funct7 = (value >> 25) & 0b1111111;
+
+        let rs2 = Register::from((value >> 20) & 0b11111);
+        let rs1 = Register::from((value >> 15) & 0b11111);
+
+        let funct3 = (value >> 12) & 0b111;
+
+        let rd = Register::from((value >> 7) & 0b11111);
+
+        Self {
+            funct7,
+            funct3,
+            rd,
+            rs1,
+            rs2
+        }
+    }
+}
+
+#[derive(Debug)]
 struct IType {
     imm: i32,
     rs1: Register,
@@ -245,9 +273,41 @@ impl From<u32> for SType {
 }
 
 #[derive(Debug)]
+struct BType {
+    imm: i32,
+    funct3: u32,
+    rs1: Register,
+    rs2: Register
+}
+
+impl From<u32> for BType {
+    fn from(value: u32) -> Self {
+        let imm12 = (value >> 31) & 0b1;
+        let imm105 = (value >> 25) & 0b111111;
+        let imm41 = (value >> 8) & 0b1111;
+        let imm11 = (value >> 7) & 0b1;
+
+        let imm = (imm12 >> 12) | (imm11 << 11) | (imm105 << 5) | (imm41 << 1);
+        let imm = ((imm as i32) << 19) >> 19;
+
+        let rs1 = Register::from((value >> 20) & 0b11111);
+        let rs2 = Register::from((value >> 15) & 0b11111);
+
+        let funct3 = (value >> 12) & 0b111;
+
+        Self {
+            imm,
+            funct3,
+            rs1,
+            rs2
+        }
+    }
+}
+
+#[derive(Debug)]
 struct UType {
     imm: i32,
-    rd: Register,
+    rd: Register
 }
 
 impl From<u32> for UType {
@@ -263,31 +323,27 @@ impl From<u32> for UType {
 }
 
 #[derive(Debug)]
-struct RType {
-    funct7: u32,
-    funct3: u32,
+struct JType {
+    imm: i32,
     rd: Register,
-    rs1: Register,
-    rs2: Register,
 }
 
-impl From<u32> for RType {
+impl From<u32> for JType {
     fn from(value: u32) -> Self {
-        let funct7 = (value >> 25) & 0b1111111;
+        let imm20 = (value >> 31) & 0b1;
+        let imm101 = (value >> 21) & 0b1111111111;
+        let imm11 = (value >> 20) & 0b1;
+        let imm1912 = (value >> 12) & 0b11111111;
 
-        let rs2 = Register::from((value >> 20) & 0b11111);
-        let rs1 = Register::from((value >> 15) & 0b11111);
-
-        let funct3 = (value >> 12) & 0b111;
+        let imm = (imm20 << 20) | (imm1912 << 12) | (imm11 << 11) |
+            (imm101 << 1);
+        let imm = ((imm as i32) << 11) >> 11;
 
         let rd = Register::from((value >> 7) & 0b11111);
 
         Self {
-            funct7,
-            funct3,
-            rd,
-            rs1,
-            rs2
+            imm,
+            rd
         }
     }
 }
@@ -311,6 +367,216 @@ impl Core {
         let current_pc = self.reg(Register::Pc);
 
         let inst = self.fetch_u32();
+        let inst = Instruction::decode(inst);
+        println!("Instruction: {:?}", inst);
+
+        match inst {
+            Instruction::Lui { rd, imm } => {
+                self.set_reg(rd, imm as i64 as u64);
+            },
+
+            Instruction::Auipc { rd, imm } => {
+                let value = (imm as i64 as u64).wrapping_add(current_pc);
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Jal { rd, imm } => {
+                let target = current_pc.wrapping_add(imm as i64 as u64);
+                let return_addr = self.reg(Register::Pc);
+
+                self.set_reg(rd, return_addr);
+                self.set_reg(Register::Pc, target);
+            },
+
+            Instruction::Jalr { rd, rs1, imm } => {
+                let target = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let return_addr = self.reg(Register::Pc);
+                self.set_reg(rd, return_addr);
+                self.set_reg(Register::Pc, target);
+            },
+
+            // Beq { rs1: Register, rs2: Register, imm: i32 } => {},
+            // Bne { rs1: Register, rs2: Register, imm: i32 } => {},
+            // Blt { rs1: Register, rs2: Register, imm: i32 } => {},
+            // Bge { rs1: Register, rs2: Register, imm: i32 } => {},
+            // Bltu { rs1: Register, rs2: Register, imm: i32 } => {},
+            // Bgeu { rs1: Register, rs2: Register, imm: i32 } => {},
+
+            Instruction::Lb { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u8(addr);
+                self.set_reg(rd, value as i8 as i64 as u64);
+            },
+
+            Instruction::Lh { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u16(addr);
+                self.set_reg(rd, value as i16 as i64 as u64);
+            },
+
+            Instruction::Lw { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u32(addr);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Lbu { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u8(addr);
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::Lhu { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u16(addr);
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::Lwu { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u32(addr);
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::Ld { rd, rs1, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.mmu.read_u64(addr);
+                self.set_reg(rd, value as i64 as u64);
+            },
+
+            Instruction::Sb { rs1, rs2, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.reg(rs2) as u8;
+                self.mmu.write_u8(addr, value);
+            },
+
+            Instruction::Sh { rs1, rs2, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.reg(rs2) as u16;
+                self.mmu.write_u16(addr, value);
+            },
+
+            Instruction::Sw { rs1, rs2, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.reg(rs2) as u32;
+                self.mmu.write_u32(addr, value);
+            },
+
+            Instruction::Sd { rs1, rs2, imm } => {
+                let addr = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+
+                let value = self.reg(rs2);
+                self.mmu.write_u64(addr, value);
+            },
+
+            Instruction::Addi { rd, rs1, imm } => {
+                let value = self.reg(rs1)
+                    .wrapping_add(imm as i64 as u64);
+                self.set_reg(rd, value);
+            },
+            // Slti   { rd: Register, rs1: Register, imm: i32 } => {},
+            // Sltiu  { rd: Register, rs1: Register, imm: i32 } => {},
+            // Xori   { rd: Register, rs1: Register, imm: i32 } => {},
+            // Ori    { rd: Register, rs1: Register, imm: i32 } => {},
+            // Andi   { rd: Register, rs1: Register, imm: i32 } => {},
+            // Slli   { rd: Register, rs1: Register, shamt: i32 } => {},
+            // Srli   { rd: Register, rs1: Register, shamt: i32 } => {},
+            // Srai   { rd: Register, rs1: Register, shamt: i32 } => {},
+
+            // Addiw { rd: Register, rs1: Register, imm: i32 } => {},
+            // Slliw { rd: Register, rs1: Register, shamt: i32 } => {},
+            // Srliw { rd: Register, rs1: Register, shamt: i32 } => {},
+            // Sraiw { rd: Register, rs1: Register, shamt: i32 } => {},
+
+            // Add  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Sub  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Sll  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Slt  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Sltu { rd: Register, rs1: Register, rs2: Register } => {},
+            // Xor  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Srl  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Sra  { rd: Register, rs1: Register, rs2: Register } => {},
+            // Or   { rd: Register, rs1: Register, rs2: Register } => {},
+            // And  { rd: Register, rs1: Register, rs2: Register } => {},
+
+            Instruction::Addw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+                let value = rs1.wrapping_add(rs2);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Subw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+                let value = rs1.wrapping_sub(rs2);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Sllw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+
+                let shamt = rs2 & 0b11111;
+                let value = (rs1 << shamt);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Srlw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+
+                let shamt = rs2 & 0b11111;
+                let value = (rs1 >> shamt);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Sraw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2);
+
+                let shamt = rs2 & 0b11111;
+                let value = (rs1 >> shamt);
+                self.set_reg(rd, value as i64 as u64);
+            },
+
+            // Fence { rd: Register, rs1: Register, imm: i32 } => {},
+
+            // Ecall,
+            // Ebreak,
+
+            Instruction::Undefined(inst) => {
+                panic!("Undefined Instruction: {:#x}", inst);
+            }
+
+            _ => unimplemented!("Unimplemented instruction: {:?}", inst),
+        }
+
+        return;
+        let inst = 0;
         let opcode = inst & 0b1111111;
 
         match opcode {
@@ -524,8 +790,85 @@ fn load_binary_program(mmu: &mut Mmu) {
 
 #[derive(Debug)]
 enum Instruction {
-    Addi { rd: Register, rs1: Register, imm: i32 },
-    Undefined,
+    // 0b0110111
+    Lui { rd: Register, imm: i32 },
+
+    // 0b0010111
+    Auipc { rd: Register, imm: i32 },
+
+    // 0b1101111
+    Jal { rd: Register, imm: i32 },
+
+    // 0b1100111
+    Jalr { rd: Register, rs1: Register, imm: i32 },
+
+    // 0b1100011
+    Beq { rs1: Register, rs2: Register, imm: i32 },
+    Bne { rs1: Register, rs2: Register, imm: i32 },
+    Blt { rs1: Register, rs2: Register, imm: i32 },
+    Bge { rs1: Register, rs2: Register, imm: i32 },
+    Bltu { rs1: Register, rs2: Register, imm: i32 },
+    Bgeu { rs1: Register, rs2: Register, imm: i32 },
+
+    // 0b0000011
+    Lb { rd: Register, rs1: Register, imm: i32 },
+    Lh { rd: Register, rs1: Register, imm: i32 },
+    Lw { rd: Register, rs1: Register, imm: i32 },
+    Lbu { rd: Register, rs1: Register, imm: i32 },
+    Lhu { rd: Register, rs1: Register, imm: i32 },
+    Lwu { rd: Register, rs1: Register, imm: i32 },
+    Ld { rd: Register, rs1: Register, imm: i32 },
+
+    // 0b0100011
+    Sb { rs1: Register, rs2: Register, imm: i32 },
+    Sh { rs1: Register, rs2: Register, imm: i32 },
+    Sw { rs1: Register, rs2: Register, imm: i32 },
+    Sd { rs1: Register, rs2: Register, imm: i32 },
+
+    // 0b0010011
+    Addi   { rd: Register, rs1: Register, imm: i32 },
+    Slti   { rd: Register, rs1: Register, imm: i32 },
+    Sltiu  { rd: Register, rs1: Register, imm: i32 },
+    Xori   { rd: Register, rs1: Register, imm: i32 },
+    Ori    { rd: Register, rs1: Register, imm: i32 },
+    Andi   { rd: Register, rs1: Register, imm: i32 },
+    Slli   { rd: Register, rs1: Register, shamt: i32 },
+    Srli   { rd: Register, rs1: Register, shamt: i32 },
+    Srai   { rd: Register, rs1: Register, shamt: i32 },
+
+    // 0b0011011
+    Addiw { rd: Register, rs1: Register, imm: i32 },
+    Slliw { rd: Register, rs1: Register, shamt: i32 },
+    Srliw { rd: Register, rs1: Register, shamt: i32 },
+    Sraiw { rd: Register, rs1: Register, shamt: i32 },
+
+    // 0b0110011
+    Add  { rd: Register, rs1: Register, rs2: Register },
+    Sub  { rd: Register, rs1: Register, rs2: Register },
+    Sll  { rd: Register, rs1: Register, rs2: Register },
+    Slt  { rd: Register, rs1: Register, rs2: Register },
+    Sltu { rd: Register, rs1: Register, rs2: Register },
+    Xor  { rd: Register, rs1: Register, rs2: Register },
+    Srl  { rd: Register, rs1: Register, rs2: Register },
+    Sra  { rd: Register, rs1: Register, rs2: Register },
+    Or   { rd: Register, rs1: Register, rs2: Register },
+    And  { rd: Register, rs1: Register, rs2: Register },
+
+    // 0b0111011
+    Addw { rd: Register, rs1: Register, rs2: Register },
+    Subw { rd: Register, rs1: Register, rs2: Register },
+    Sllw { rd: Register, rs1: Register, rs2: Register },
+    Srlw { rd: Register, rs1: Register, rs2: Register },
+    Sraw { rd: Register, rs1: Register, rs2: Register },
+
+    // 0b0001111
+    Fence { rd: Register, rs1: Register, imm: i32 },
+
+    // 0b1110011
+    Ecall,
+    Ebreak,
+
+    Undefined(u32),
 }
 
 impl Instruction {
@@ -533,38 +876,230 @@ impl Instruction {
         let opcode = inst & 0b1111111;
 
         if let Some(typ) = TYPE_MAPPING_TABLE[opcode as usize] {
-            println!("Type: {:?}", typ);
-
-            match typ {
-                Type::R => {},
-                Type::I => {
-                    let inst = IType::from(inst);
-                    let rd = inst.rd;
-                    let rs1 = inst.rs1;
-                    let imm = inst.imm;
-
-                    match opcode {
-                        0b0010011 => {
-                            match inst.funct3 {
-                                0b000 => {
-                                    return Instruction::Addi { rd, rs1, imm };
-                                }
-
-                                _ => panic!()
-                            }
-                        }
-
-                        _ => panic!()
-                    }
-                },
-                Type::S => {},
-                Type::B => {},
-                Type::U => {},
-                Type::J => {},
+            return match typ {
+                Type::R => Self::decode_r(inst, opcode),
+                Type::I => Self::decode_i(inst, opcode),
+                Type::S => Self::decode_s(inst, opcode),
+                Type::B => Self::decode_b(inst, opcode),
+                Type::U => Self::decode_u(inst, opcode),
+                Type::J => Self::decode_j(inst, opcode),
             }
         }
 
-        Instruction::Undefined
+        Instruction::Undefined(inst)
+    }
+
+    fn decode_r(original_inst: u32, opcode: u32) -> Self {
+        let inst = RType::from(original_inst);
+        let rd = inst.rd;
+        let rs1 = inst.rs1;
+        let rs2 = inst.rs2;
+
+        return match opcode {
+            0b0110011 => {
+                match (inst.funct7, inst.funct3) {
+                    (0b0000000, 0b000) => Instruction::Add  { rd, rs1, rs2 },
+                    (0b0100000, 0b000) => Instruction::Sub  { rd, rs1, rs2 },
+                    (0b0000000, 0b001) => Instruction::Sll  { rd, rs1, rs2 },
+                    (0b0000000, 0b010) => Instruction::Slt  { rd, rs1, rs2 },
+                    (0b0000000, 0b011) => Instruction::Sltu { rd, rs1, rs2 },
+                    (0b0000000, 0b100) => Instruction::Xor  { rd, rs1, rs2 },
+                    (0b0000000, 0b101) => Instruction::Srl  { rd, rs1, rs2 },
+                    (0b0100000, 0b101) => Instruction::Sra  { rd, rs1, rs2 },
+                    (0b0000000, 0b110) => Instruction::Or   { rd, rs1, rs2 },
+                    (0b0000000, 0b111) => Instruction::And  { rd, rs1, rs2 },
+
+                    _ => Instruction::Undefined(original_inst)
+                }
+            }
+
+            0b0111011 => {
+                match (inst.funct7, inst.funct3) {
+                    (0b0000000, 0b000) => Instruction::Addw { rd, rs1, rs2 },
+                    (0b0100000, 0b000) => Instruction::Subw { rd, rs1, rs2 },
+                    (0b0000000, 0b001) => Instruction::Sllw { rd, rs1, rs2 },
+                    (0b0000000, 0b101) => Instruction::Srlw { rd, rs1, rs2 },
+                    (0b0100000, 0b101) => Instruction::Sraw { rd, rs1, rs2 },
+
+                    _ => Instruction::Undefined(original_inst)
+                }
+            }
+
+            _ => Instruction::Undefined(original_inst)
+        }
+    }
+
+    fn decode_i(original_inst: u32, opcode: u32) -> Self {
+        let inst = IType::from(original_inst);
+        let rd = inst.rd;
+        let rs1 = inst.rs1;
+        let imm = inst.imm;
+
+        return match opcode {
+            0b1100111 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Jalr { rd, rs1, imm },
+
+                    _ => Instruction::Undefined(original_inst),
+                };
+            }
+
+            0b0000011 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Lb { rd, rs1, imm },
+                    0b001 => Instruction::Lh { rd, rs1, imm },
+                    0b010 => Instruction::Lw { rd, rs1, imm },
+                    0b100 => Instruction::Lbu { rd, rs1, imm },
+                    0b101 => Instruction::Lhu { rd, rs1, imm },
+                    0b110 => Instruction::Lwu { rd, rs1, imm },
+                    0b011 => Instruction::Ld { rd, rs1, imm },
+
+                    _ => Instruction::Undefined(original_inst),
+                };
+            }
+
+            0b0010011 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Addi { rd, rs1, imm },
+                    0b010 => Instruction::Slti { rd, rs1, imm },
+                    0b011 => Instruction::Sltiu { rd, rs1, imm },
+                    0b100 => Instruction::Xori { rd, rs1, imm },
+                    0b110 => Instruction::Ori { rd, rs1, imm },
+                    0b111 => Instruction::Andi { rd, rs1, imm },
+
+                    0b001 => {
+                        let shamt = inst.imm & 0b111111;
+                        Instruction::Slli { rd, rs1, shamt }
+                    },
+
+                    0b101 => {
+                        let shamt = inst.imm & 0b111111;
+                        let mode = (inst.imm >> 6) & 0b111111;
+
+                        return match mode {
+                            0b000000 => Instruction::Srli { rd, rs1, shamt },
+                            0b010000 => Instruction::Srai { rd, rs1, shamt },
+
+                            _ => Instruction::Undefined(original_inst),
+                        };
+                    }
+
+                    _ => Instruction::Undefined(original_inst),
+                };
+            }
+
+            0b0011011 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Addiw { rd, rs1, imm },
+                    0b001 => {
+                        let shamt = inst.imm & 0b111111;
+                        Instruction::Slliw { rd, rs1, shamt }
+                    }
+                    0b101 => {
+                        let shamt = inst.imm & 0b111111;
+                        let mode = (inst.imm >> 6) & 0b111111;
+
+                        return match mode {
+                            0b000000 => Instruction::Srliw { rd, rs1, shamt },
+                            0b010000 => Instruction::Sraiw { rd, rs1, shamt },
+
+                            _ => Instruction::Undefined(original_inst),
+                        };
+                    }
+                    _ => Instruction::Undefined(original_inst),
+                }
+            }
+
+            0b0001111 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Fence { rd, rs1, imm },
+
+                    _ => Instruction::Undefined(original_inst),
+                };
+            }
+
+            0b1110011 => {
+                return if imm == 0 {
+                    Instruction::Ecall
+                } else if imm == 1 {
+                    Instruction::Ebreak
+                } else {
+                    Instruction::Undefined(original_inst)
+                };
+            }
+
+            _ => Instruction::Undefined(original_inst),
+        }
+    }
+
+    fn decode_s(original_inst: u32, opcode: u32) -> Self {
+        let inst = SType::from(original_inst);
+        let rs1 = inst.rs1;
+        let rs2 = inst.rs2;
+        let imm = inst.imm;
+
+        return match opcode {
+            0b0100011 => {
+                return match inst.funct3 {
+                    0b000 => Instruction::Sb { rs1, rs2, imm },
+                    0b001 => Instruction::Sh { rs1, rs2, imm },
+                    0b010 => Instruction::Sw { rs1, rs2, imm },
+                    0b011 => Instruction::Sd { rs1, rs2, imm },
+                    _ => Instruction::Undefined(original_inst)
+                };
+            }
+
+            _ => Instruction::Undefined(original_inst)
+        };
+
+    }
+
+    fn decode_b(original_inst: u32, opcode: u32) -> Self {
+        let inst = BType::from(original_inst);
+        let rs1 = inst.rs1;
+        let rs2 = inst.rs2;
+        let imm = inst.imm;
+
+        return match opcode {
+            0b1100011 => {
+                match inst.funct3 {
+                    0b000 => Instruction::Beq { rs1, rs2, imm },
+                    0b001 => Instruction::Bne { rs1, rs2, imm },
+                    0b100 => Instruction::Blt { rs1, rs2, imm },
+                    0b101 => Instruction::Bge { rs1, rs2, imm },
+                    0b110 => Instruction::Bltu { rs1, rs2, imm },
+                    0b111 => Instruction::Bgeu { rs1, rs2, imm },
+
+                    _ => Instruction::Undefined(original_inst)
+                }
+            },
+
+            _ => Instruction::Undefined(original_inst)
+        };
+    }
+
+    fn decode_u(original_inst: u32, opcode: u32) -> Self {
+        let inst = UType::from(original_inst);
+        let rd = inst.rd;
+        let imm = inst.imm;
+
+        return match opcode {
+            0b0110111 => Instruction::Lui { rd, imm },
+            0b0010111 => Instruction::Auipc { rd, imm },
+
+            _ => Instruction::Undefined(original_inst),
+        };
+    }
+
+    fn decode_j(original_inst: u32, opcode: u32) -> Self {
+        let inst = JType::from(original_inst);
+        let imm = inst.imm;
+        let rd = inst.rd;
+
+        return match opcode {
+            0b1101111 => Instruction::Jal { rd, imm },
+            _ => Instruction::Undefined(original_inst),
+        };
     }
 }
 
@@ -606,7 +1141,7 @@ static TYPE_MAPPING_TABLE: [Option<Type>; 128] = [
     None,          // 0b0011000
     None,          // 0b0011001
     None,          // 0b0011010
-    None,          // 0b0011011
+    Some(Type::I), // 0b0011011
     None,          // 0b0011100
     None,          // 0b0011101
     None,          // 0b0011110
@@ -710,11 +1245,6 @@ static TYPE_MAPPING_TABLE: [Option<Type>; 128] = [
 ];
 
 fn main() {
-    let instruction = Instruction::decode(0xfe010113);
-    println!("Instruction: {:?}", instruction);
-
-    return;
-
     let mut mmu = Mmu::new(1 * 1024 * 1024);
     load_binary_program(&mut mmu);
 
