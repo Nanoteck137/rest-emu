@@ -522,7 +522,199 @@ fn load_binary_program(mmu: &mut Mmu) {
     }
 }
 
+#[derive(Debug)]
+enum Instruction {
+    Addi { rd: Register, rs1: Register, imm: i32 },
+    Undefined,
+}
+
+impl Instruction {
+    fn decode(inst: u32) -> Self {
+        let opcode = inst & 0b1111111;
+
+        if let Some(typ) = TYPE_MAPPING_TABLE[opcode as usize] {
+            println!("Type: {:?}", typ);
+
+            match typ {
+                Type::R => {},
+                Type::I => {
+                    let inst = IType::from(inst);
+                    let rd = inst.rd;
+                    let rs1 = inst.rs1;
+                    let imm = inst.imm;
+
+                    match opcode {
+                        0b0010011 => {
+                            match inst.funct3 {
+                                0b000 => {
+                                    return Instruction::Addi { rd, rs1, imm };
+                                }
+
+                                _ => panic!()
+                            }
+                        }
+
+                        _ => panic!()
+                    }
+                },
+                Type::S => {},
+                Type::B => {},
+                Type::U => {},
+                Type::J => {},
+            }
+        }
+
+        Instruction::Undefined
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+enum Type {
+    R,
+    I,
+    S,
+    B,
+    U,
+    J
+}
+
+static TYPE_MAPPING_TABLE: [Option<Type>; 128] = [
+    None,          // 0b0000000
+    None,          // 0b0000001
+    None,          // 0b0000010
+    Some(Type::I), // 0b0000011
+    None,          // 0b0000100
+    None,          // 0b0000101
+    None,          // 0b0000110
+    None,          // 0b0000111
+    None,          // 0b0001000
+    None,          // 0b0001001
+    None,          // 0b0001010
+    None,          // 0b0001011
+    None,          // 0b0001100
+    None,          // 0b0001101
+    None,          // 0b0001110
+    Some(Type::I), // 0b0001111
+    None,          // 0b0010000
+    None,          // 0b0010001
+    None,          // 0b0010010
+    Some(Type::I), // 0b0010011
+    None,          // 0b0010100
+    None,          // 0b0010101
+    None,          // 0b0010110
+    Some(Type::U), // 0b0010111
+    None,          // 0b0011000
+    None,          // 0b0011001
+    None,          // 0b0011010
+    None,          // 0b0011011
+    None,          // 0b0011100
+    None,          // 0b0011101
+    None,          // 0b0011110
+    None,          // 0b0011111
+    None,          // 0b0100000
+    None,          // 0b0100001
+    None,          // 0b0100010
+    Some(Type::S), // 0b0100011
+    None,          // 0b0100100
+    None,          // 0b0100101
+    None,          // 0b0100110
+    None,          // 0b0100111
+    None,          // 0b0101000
+    None,          // 0b0101001
+    None,          // 0b0101010
+    None,          // 0b0101011
+    None,          // 0b0101100
+    None,          // 0b0101101
+    None,          // 0b0101110
+    None,          // 0b0101111
+    None,          // 0b0110000
+    None,          // 0b0110001
+    None,          // 0b0110010
+    Some(Type::R), // 0b0110011
+    None,          // 0b0110100
+    None,          // 0b0110101
+    None,          // 0b0110110
+    Some(Type::U), // 0b0110111
+    None,          // 0b0111000
+    None,          // 0b0111001
+    None,          // 0b0111010
+    Some(Type::R), // 0b0111011
+    None,          // 0b0111100
+    None,          // 0b0111101
+    None,          // 0b0111110
+    None,          // 0b0111111
+    None,          // 0b1000000
+    None,          // 0b1000001
+    None,          // 0b1000010
+    None,          // 0b1000011
+    None,          // 0b1000100
+    None,          // 0b1000101
+    None,          // 0b1000110
+    None,          // 0b1000111
+    None,          // 0b1001000
+    None,          // 0b1001001
+    None,          // 0b1001010
+    None,          // 0b1001011
+    None,          // 0b1001100
+    None,          // 0b1001101
+    None,          // 0b1001110
+    None,          // 0b1001111
+    None,          // 0b1010000
+    None,          // 0b1010001
+    None,          // 0b1010010
+    None,          // 0b1010011
+    None,          // 0b1010100
+    None,          // 0b1010101
+    None,          // 0b1010110
+    None,          // 0b1010111
+    None,          // 0b1011000
+    None,          // 0b1011001
+    None,          // 0b1011010
+    None,          // 0b1011011
+    None,          // 0b1011100
+    None,          // 0b1011101
+    None,          // 0b1011110
+    None,          // 0b1011111
+    None,          // 0b1100000
+    None,          // 0b1100001
+    None,          // 0b1100010
+    Some(Type::B), // 0b1100011
+    None,          // 0b1100100
+    None,          // 0b1100101
+    None,          // 0b1100110
+    Some(Type::I), // 0b1100111
+    None,          // 0b1101000
+    None,          // 0b1101001
+    None,          // 0b1101010
+    None,          // 0b1101011
+    None,          // 0b1101100
+    None,          // 0b1101101
+    None,          // 0b1101110
+    Some(Type::J), // 0b1101111
+    None,          // 0b1110000
+    None,          // 0b1110001
+    None,          // 0b1110010
+    Some(Type::I), // 0b1110011
+    None,          // 0b1110100
+    None,          // 0b1110101
+    None,          // 0b1110110
+    None,          // 0b1110111
+    None,          // 0b1111000
+    None,          // 0b1111001
+    None,          // 0b1111010
+    None,          // 0b1111011
+    None,          // 0b1111100
+    None,          // 0b1111101
+    None,          // 0b1111110
+    None,          // 0b1111111
+];
+
 fn main() {
+    let instruction = Instruction::decode(0xfe010113);
+    println!("Instruction: {:?}", instruction);
+
+    return;
+
     let mut mmu = Mmu::new(1 * 1024 * 1024);
     load_binary_program(&mut mmu);
 
