@@ -497,30 +497,191 @@ impl Core {
                     .wrapping_add(imm as i64 as u64);
                 self.set_reg(rd, value);
             },
-            // Slti   { rd: Register, rs1: Register, imm: i32 } => {},
-            // Sltiu  { rd: Register, rs1: Register, imm: i32 } => {},
-            // Xori   { rd: Register, rs1: Register, imm: i32 } => {},
-            // Ori    { rd: Register, rs1: Register, imm: i32 } => {},
-            // Andi   { rd: Register, rs1: Register, imm: i32 } => {},
-            // Slli   { rd: Register, rs1: Register, shamt: i32 } => {},
-            // Srli   { rd: Register, rs1: Register, shamt: i32 } => {},
-            // Srai   { rd: Register, rs1: Register, shamt: i32 } => {},
 
-            // Addiw { rd: Register, rs1: Register, imm: i32 } => {},
-            // Slliw { rd: Register, rs1: Register, shamt: i32 } => {},
-            // Srliw { rd: Register, rs1: Register, shamt: i32 } => {},
-            // Sraiw { rd: Register, rs1: Register, shamt: i32 } => {},
+            Instruction::Slti { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1) as i64;
+                let imm = imm as i64;
 
-            // Add  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Sub  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Sll  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Slt  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Sltu { rd: Register, rs1: Register, rs2: Register } => {},
-            // Xor  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Srl  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Sra  { rd: Register, rs1: Register, rs2: Register } => {},
-            // Or   { rd: Register, rs1: Register, rs2: Register } => {},
-            // And  { rd: Register, rs1: Register, rs2: Register } => {},
+                if rs1 < imm {
+                    self.set_reg(rd, 1);
+                } else {
+                    self.set_reg(rd, 0);
+                }
+            },
+            Instruction::Sltiu { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1);
+                let imm = imm as i64 as u64;
+
+                if rs1 < imm {
+                    self.set_reg(rd, 1);
+                } else {
+                    self.set_reg(rd, 0);
+                }
+            },
+
+            Instruction::Xori { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1);
+                let imm = imm as i64 as u64;
+
+                let value = rs1 ^ imm;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Ori { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1);
+                let imm = imm as i64 as u64;
+
+                let value = rs1 | imm;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Andi { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1);
+                let imm = imm as i64 as u64;
+
+                let value = rs1 & imm;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Slli { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1);
+
+                let value = rs1 << shamt;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Srli { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1);
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Srai { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1) as i64;
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::Addiw { rd, rs1, imm } => {
+                let rs1 = self.reg(rs1) as u32;
+                let imm = imm as u32;
+
+                let value = rs1.wrapping_add(imm);
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Slliw { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1) as u32;
+
+                let value = rs1 << shamt;
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Srliw { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1) as u32;
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value as i32 as i64 as u64);
+            },
+
+            Instruction::Sraiw { rd, rs1, shamt } => {
+                let rs1 = self.reg(rs1) as u32 as i32;
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value as i64 as u64);
+            },
+
+            Instruction::Add { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1.wrapping_add(rs2);
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Sub { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1.wrapping_sub(rs2);
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Sll { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let shamt = rs2 & 0b111111;
+
+                let value = rs1 << shamt;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Slt { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2) as i64;
+
+                if rs1 < rs2 {
+                    self.set_reg(rd, 1);
+                } else {
+                    self.set_reg(rd, 0);
+                }
+            },
+
+            Instruction::Sltu { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                if rs1 < rs2 {
+                    self.set_reg(rd, 1);
+                } else {
+                    self.set_reg(rd, 0);
+                }
+            },
+
+            Instruction::Xor { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1 ^ rs2;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Srl { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+                let shamt = rs2 & 0b111111;
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value);
+            },
+
+            Instruction::Sra { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2);
+                let shamt = rs2 & 0b111111;
+
+                let value = rs1 >> shamt;
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::Or { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1 | rs2;
+                self.set_reg(rd, value as u64);
+            },
+
+            Instruction::And { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1 & rs2;
+                self.set_reg(rd, value as u64);
+            },
 
             Instruction::Addw { rd, rs1, rs2 } => {
                 let rs1 = self.reg(rs1) as u32;
