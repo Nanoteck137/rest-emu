@@ -32,6 +32,9 @@ fn main() {
     core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
+    core.set_reg(Register::A0, 6);
+    core.set_reg(Register::A1, 5);
+
     loop {
         let res = core.step();
         println!("Exit: {:#?}", res);

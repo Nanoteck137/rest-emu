@@ -427,8 +427,8 @@ impl From<u32> for BType {
         let imm = (imm12 << 12) | (imm11 << 11) | (imm105 << 5) | (imm41 << 1);
         let imm = ((imm as i32) << 19) >> 19;
 
-        let rs1 = Register::from((value >> 20) & 0b11111);
-        let rs2 = Register::from((value >> 15) & 0b11111);
+        let rs1 = Register::from((value >> 15) & 0b11111);
+        let rs2 = Register::from((value >> 20) & 0b11111);
 
         let funct3 = (value >> 12) & 0b111;
 
