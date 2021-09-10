@@ -1,7 +1,8 @@
 use crate::instruction::Instruction;
 use crate::mmu::Mmu;
 
-const NUM_REGISTERS: usize = 33;
+const MAX_REGISTERS: usize = 33;
+const MAX_CSR_REGISTERS: usize = 4096;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Register {
@@ -130,7 +131,8 @@ pub enum CoreExit {
 }
 
 pub struct Core {
-    registers: [u64; NUM_REGISTERS],
+    registers: [u64; MAX_REGISTERS],
+    csr_registers: [u64; MAX_CSR_REGISTERS],
 
     mmu: Mmu
 }
@@ -138,7 +140,8 @@ pub struct Core {
 impl Core {
     pub fn new(mmu: Mmu) -> Self {
         Self {
-            registers: [0; NUM_REGISTERS],
+            registers: [0; MAX_REGISTERS],
+            csr_registers: [0; MAX_CSR_REGISTERS],
 
             mmu
         }
@@ -669,6 +672,95 @@ impl Core {
             Instruction::Ecall => CoreExit::Ecall,
             Instruction::Ebreak => CoreExit::Ebreak,
 
+            Instruction::Csrrw { rd, rs1, csr } => {
+                // NOTE(patrik): Doing this because the spec says that if the
+                // Zero/x0 register is used for rd then don't read the csr
+                // and if we change self.read_csr to have side effect we don't
+                // want those to effect when the user if not reading the csr
+                // but this current implementation dosen't have side effects
+                // inside read_csr
+                if rd != Register::Zero {
+                    let value = self.read_csr(csr);
+                    self.set_reg(rd, value);
+                }
+
+                let rs1 = self.reg(rs1);
+                self.write_csr(csr, rs1);
+
+                CoreExit::Success
+            },
+
+            Instruction::Csrrs { rd, rs1, csr } => {
+                let value = self.read_csr(csr);
+                self.set_reg(rd, value);
+
+                // NOTE(patrik): If rs1 is the zero/x0 register then don't
+                // write to the csr
+                if rs1 != Register::Zero {
+                    let rs1 = self.reg(rs1);
+                    self.write_csr(csr, value | rs1);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Csrrc { rd, rs1, csr } => {
+                let value = self.read_csr(csr);
+                self.set_reg(rd, value);
+
+                // NOTE(patrik): If rs1 is the zero/x0 register then don't
+                // write to the csr
+                if rs1 != Register::Zero {
+                    let rs1 = self.reg(rs1);
+                    self.write_csr(csr, value & !rs1);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Csrrwi { rd, uimm, csr } => {
+                // NOTE(patrik): Doing this because the spec says that if the
+                // Zero/x0 register is used for rd then don't read the csr
+                // and if we change self.read_csr to have side effect we don't
+                // want those to effect when the user if not reading the csr
+                // but this current implementation dosen't have side effects
+                // inside read_csr
+                if rd != Register::Zero {
+                    let value = self.read_csr(csr);
+                    self.set_reg(rd, value);
+                }
+
+                self.write_csr(csr, uimm as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Csrrsi { rd, uimm, csr } => {
+                let value = self.read_csr(csr);
+                self.set_reg(rd, value);
+
+                // NOTE(patrik): If uimm is 0 then don't write to csr
+                if uimm != 0 {
+                    let uimm = uimm as u64;
+                    self.write_csr(csr, value | uimm);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Csrrci { rd, uimm, csr } => {
+                let value = self.read_csr(csr);
+                self.set_reg(rd, value);
+
+                // NOTE(patrik): If uimm is 0 then don't write to csr
+                if uimm != 0 {
+                    let uimm = uimm as u64;
+                    self.write_csr(csr, value & !uimm);
+                }
+
+                CoreExit::Success
+            },
+
             Instruction::Undefined(inst) => {
                 // TODO(patrik): Print more infomation about the inst
                 //               like the type from the type table if it
@@ -678,6 +770,28 @@ impl Core {
 
             _ => unimplemented!("Unimplemented instruction: {:?}", inst),
         };
+    }
+
+    pub fn write_csr(&mut self, csr: u16, value: u64) {
+        let csr = csr as usize;
+
+        if csr >= MAX_CSR_REGISTERS {
+            panic!("write_csr: csr address is over the max 4096 limit: {}",
+                   csr);
+        }
+
+        self.csr_registers[csr as usize] = value;
+    }
+
+    pub fn read_csr(&self, csr: u16) -> u64 {
+        let csr = csr as usize;
+
+        if csr >= MAX_CSR_REGISTERS {
+            panic!("read_csr: csr address is over the max 4096 limit: {}",
+                   csr);
+        }
+
+        self.csr_registers[csr as usize]
     }
 
     fn fetch_u32(&mut self) -> u32 {

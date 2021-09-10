@@ -35,6 +35,8 @@ fn main() {
     core.set_reg(Register::A0, 6);
     core.set_reg(Register::A1, 5);
 
+    core.write_csr(0xfff, 0b111);
+
     loop {
         let res = core.step();
         println!("Exit: {:#?}", res);
@@ -45,4 +47,7 @@ fn main() {
     }
 
     println!("{:#x?}", core);
+
+    let value = core.read_csr(0xfff);
+    println!("CSR Reg: {:#b}", value);
 }

@@ -25,21 +25,21 @@ pub enum Instruction {
     Jalr { rd: Register, rs1: Register, imm: i32 },
 
     // 0b1100011
-    Beq { rs1: Register, rs2: Register, imm: i32 },
-    Bne { rs1: Register, rs2: Register, imm: i32 },
-    Blt { rs1: Register, rs2: Register, imm: i32 },
-    Bge { rs1: Register, rs2: Register, imm: i32 },
+    Beq  { rs1: Register, rs2: Register, imm: i32 },
+    Bne  { rs1: Register, rs2: Register, imm: i32 },
+    Blt  { rs1: Register, rs2: Register, imm: i32 },
+    Bge  { rs1: Register, rs2: Register, imm: i32 },
     Bltu { rs1: Register, rs2: Register, imm: i32 },
     Bgeu { rs1: Register, rs2: Register, imm: i32 },
 
     // 0b0000011
-    Lb { rd: Register, rs1: Register, imm: i32 },
-    Lh { rd: Register, rs1: Register, imm: i32 },
-    Lw { rd: Register, rs1: Register, imm: i32 },
+    Lb  { rd: Register, rs1: Register, imm: i32 },
+    Lh  { rd: Register, rs1: Register, imm: i32 },
+    Lw  { rd: Register, rs1: Register, imm: i32 },
     Lbu { rd: Register, rs1: Register, imm: i32 },
     Lhu { rd: Register, rs1: Register, imm: i32 },
     Lwu { rd: Register, rs1: Register, imm: i32 },
-    Ld { rd: Register, rs1: Register, imm: i32 },
+    Ld  { rd: Register, rs1: Register, imm: i32 },
 
     // 0b0100011
     Sb { rs1: Register, rs2: Register, imm: i32 },
@@ -89,6 +89,12 @@ pub enum Instruction {
     // 0b1110011
     Ecall,
     Ebreak,
+    Csrrw  { rd: Register, rs1: Register, csr: u16 },
+    Csrrs  { rd: Register, rs1: Register, csr: u16 },
+    Csrrc  { rd: Register, rs1: Register, csr: u16 },
+    Csrrwi { rd: Register, uimm: u32, csr: u16 },
+    Csrrsi { rd: Register, uimm: u32, csr: u16 },
+    Csrrci { rd: Register, uimm: u32, csr: u16 },
 
     Undefined(u32),
 }
@@ -241,13 +247,29 @@ impl Instruction {
             }
 
             0b1110011 => {
-                return if imm == 0 {
-                    Instruction::Ecall
-                } else if imm == 1 {
-                    Instruction::Ebreak
-                } else {
-                    Instruction::Undefined(original_inst)
-                };
+                let csr = (imm & 0b111111111111) as u16;
+                let uimm = (original_inst >> 15) & 0b11111;
+
+                return match inst.funct3 {
+                    0b000 => {
+                        return match imm & 0b111111111111 {
+                            0 => Instruction::Ecall,
+                            1 => Instruction::Ebreak,
+
+                            _ => Instruction::Undefined(original_inst),
+                        }
+                    }
+
+                    0b001 => Instruction::Csrrw { rd, rs1, csr },
+                    0b010 => Instruction::Csrrs { rd, rs1, csr },
+                    0b011 => Instruction::Csrrc { rd, rs1, csr },
+
+                    0b101 => Instruction::Csrrwi { rd, uimm, csr },
+                    0b110 => Instruction::Csrrsi { rd, uimm, csr },
+                    0b111 => Instruction::Csrrci { rd, uimm, csr },
+
+                    _ => Instruction::Undefined(original_inst),
+                }
             }
 
             _ => Instruction::Undefined(original_inst),
