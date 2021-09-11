@@ -1,4 +1,5 @@
-use crate::instruction::Instruction;
+use crate::instruction::{ Instruction, Type };
+use crate::instruction::{ RType, IType, SType, BType, UType, JType };
 use crate::mmu::Mmu;
 
 const MAX_REGISTERS: usize = 33;
@@ -614,6 +615,102 @@ impl Core {
                 CoreExit::Success
             },
 
+            Instruction::Mul { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                let value = rs1.wrapping_mul(rs2);
+                self.set_reg(rd, value);
+
+                CoreExit::Success
+            },
+
+            Instruction::Mulh { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64 as i128;
+                let rs2 = self.reg(rs2) as i64 as i128;
+
+                let value = rs1.wrapping_mul(rs2);
+                self.set_reg(rd, (value >> 64) as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Mulhsu { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64 as u128;
+                let rs2 = self.reg(rs2) as u128;
+
+                let value = rs1.wrapping_mul(rs2);
+                self.set_reg(rd, (value >> 64) as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Mulhu { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u128;
+                let rs2 = self.reg(rs2) as u128;
+
+                let value = rs1.wrapping_mul(rs2);
+                self.set_reg(rd, (value >> 64) as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Div { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2) as i64;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u64::MAX);
+                } else {
+                    let value = rs1.wrapping_div(rs2);
+                    self.set_reg(rd, value as u64);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Divu { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u64::MAX);
+                } else {
+                    let value = rs1.wrapping_div(rs2);
+                    self.set_reg(rd, value);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Rem { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as i64;
+                let rs2 = self.reg(rs2) as i64;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, rs1 as u64);
+                } else {
+                    let value = rs1.wrapping_rem(rs2);
+                    self.set_reg(rd, value as u64);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Remu { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1);
+                let rs2 = self.reg(rs2);
+
+                if rs2 == 0 {
+                    self.set_reg(rd, rs1 as u64);
+                } else {
+                    let value = rs1.wrapping_rem(rs2);
+                    self.set_reg(rd, value);
+                }
+
+                CoreExit::Success
+            },
+
             Instruction::Addw { rd, rs1, rs2 } => {
                 let rs1 = self.reg(rs1) as u32;
                 let rs2 = self.reg(rs2) as u32;
@@ -663,6 +760,72 @@ impl Core {
 
                 let value = rs1 >> shamt;
                 self.set_reg(rd, value as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Mulw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+
+                let value = rs1.wrapping_mul(rs2);
+                self.set_reg(rd, value as i32 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Divw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32 as i32;
+                let rs2 = self.reg(rs2) as u32 as i32;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u32::MAX as i32 as u64);
+                } else {
+                    let value = rs1.wrapping_div(rs2);
+                    self.set_reg(rd, value as u64);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Divuw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u32::MAX as i32 as u64);
+                } else {
+                    let value = rs1.wrapping_div(rs2);
+                    self.set_reg(rd, value as i32 as u64);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Remw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32 as i32;
+                let rs2 = self.reg(rs2) as u32 as i32;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u32::MAX as i32 as u64);
+                } else {
+                    let value = rs1.wrapping_rem(rs2);
+                    self.set_reg(rd, value as u64);
+                }
+
+                CoreExit::Success
+            },
+
+            Instruction::Remuw { rd, rs1, rs2 } => {
+                let rs1 = self.reg(rs1) as u32;
+                let rs2 = self.reg(rs2) as u32;
+
+                if rs2 == 0 {
+                    self.set_reg(rd, u32::MAX as i32 as u64);
+                } else {
+                    let value = rs1.wrapping_rem(rs2);
+                    self.set_reg(rd, value as i32 as u64);
+                }
 
                 CoreExit::Success
             },
@@ -762,10 +925,54 @@ impl Core {
             },
 
             Instruction::Undefined(inst) => {
+                let opcode = inst & 0b1111111;
+                let typ = Instruction::decode_type(opcode);
+                if let Some(typ) = typ {
+                    match typ {
+                        Type::R => {
+                            let inst = RType::from(inst);
+                            panic!("Undefined Instruction R - funct7: 0b{:07b} \
+                                   funct3: 0b{:03b} opcode: 0b{:07b}",
+                                   inst.funct7, inst.funct3, opcode);
+                        },
+
+                        Type::I => {
+                            let inst = IType::from(inst);
+                            panic!("Undefined Instruction I - funct3: 0b{:03b} \
+                                   opcode: 0b{:07b}", inst.funct3, opcode);
+                        },
+
+                        Type::S => {
+                            let inst = SType::from(inst);
+                            panic!("Undefined Instruction S - funct3: 0b{:03b} \
+                                   opcode: 0b{:07b}", inst.funct3, opcode);
+                        },
+
+                        Type::B => {
+                            let inst = BType::from(inst);
+                            panic!("Undefined Instruction B - funct3: 0b{:03b} \
+                                   opcode: 0b{:07b}", inst.funct3, opcode);
+                        },
+
+                        Type::U => {
+                            let _inst = UType::from(inst);
+                            panic!("Undefined Instruction U - opcode: 0b{:07b}",
+                                   opcode);
+                        },
+
+                        Type::J => {
+                            let _inst = JType::from(inst);
+                            panic!("Undefined Instruction J - opcode: 0b{:07b}",
+                                   opcode);
+                        }
+                    }
+                }
+
                 // TODO(patrik): Print more infomation about the inst
                 //               like the type from the type table if it
                 //               exists
-                panic!("Undefined Instruction: {:#x}", inst);
+                panic!("Undefined Instruction: {:#x} - opcode: 0b{:07b}",
+                       inst, opcode);
             }
 
             _ => unimplemented!("Unimplemented instruction: {:?}", inst),

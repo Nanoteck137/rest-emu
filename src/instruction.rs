@@ -1,7 +1,7 @@
 use crate::Register;
 
 #[derive(Copy, Clone, Debug)]
-enum Type {
+pub enum Type {
     R,
     I,
     S,
@@ -75,6 +75,15 @@ pub enum Instruction {
     Sra  { rd: Register, rs1: Register, rs2: Register },
     Or   { rd: Register, rs1: Register, rs2: Register },
     And  { rd: Register, rs1: Register, rs2: Register },
+    // M Extention
+    Mul    { rd: Register, rs1: Register, rs2: Register },
+    Mulh   { rd: Register, rs1: Register, rs2: Register },
+    Mulhsu { rd: Register, rs1: Register, rs2: Register },
+    Mulhu  { rd: Register, rs1: Register, rs2: Register },
+    Div    { rd: Register, rs1: Register, rs2: Register },
+    Divu   { rd: Register, rs1: Register, rs2: Register },
+    Rem    { rd: Register, rs1: Register, rs2: Register },
+    Remu   { rd: Register, rs1: Register, rs2: Register },
 
     // 0b0111011
     Addw { rd: Register, rs1: Register, rs2: Register },
@@ -82,6 +91,12 @@ pub enum Instruction {
     Sllw { rd: Register, rs1: Register, rs2: Register },
     Srlw { rd: Register, rs1: Register, rs2: Register },
     Sraw { rd: Register, rs1: Register, rs2: Register },
+    // M Extention
+    Mulw  { rd: Register, rs1: Register, rs2: Register },
+    Divw  { rd: Register, rs1: Register, rs2: Register },
+    Divuw { rd: Register, rs1: Register, rs2: Register },
+    Remw  { rd: Register, rs1: Register, rs2: Register },
+    Remuw { rd: Register, rs1: Register, rs2: Register },
 
     // 0b0001111
     Fence { rd: Register, rs1: Register, imm: i32 },
@@ -103,7 +118,7 @@ impl Instruction {
     pub fn decode(inst: u32) -> Self {
         let opcode = inst & 0b1111111;
 
-        if let Some(typ) = TYPE_MAPPING_TABLE[opcode as usize] {
+        if let Some(typ) = Self::decode_type(opcode) {
             return match typ {
                 Type::R => Self::decode_r(inst, opcode),
                 Type::I => Self::decode_i(inst, opcode),
@@ -115,6 +130,10 @@ impl Instruction {
         }
 
         Instruction::Undefined(inst)
+    }
+
+    pub fn decode_type(opcode: u32) -> Option<Type> {
+         TYPE_MAPPING_TABLE[opcode as usize]
     }
 
     fn decode_r(original_inst: u32, opcode: u32) -> Self {
@@ -137,6 +156,17 @@ impl Instruction {
                     (0b0000000, 0b110) => Instruction::Or   { rd, rs1, rs2 },
                     (0b0000000, 0b111) => Instruction::And  { rd, rs1, rs2 },
 
+                    // M Extention
+
+                    (0b0000001, 0b000) => Instruction::Mul    { rd, rs1, rs2 },
+                    (0b0000001, 0b001) => Instruction::Mulh   { rd, rs1, rs2 },
+                    (0b0000001, 0b010) => Instruction::Mulhsu { rd, rs1, rs2 },
+                    (0b0000001, 0b011) => Instruction::Mulhu  { rd, rs1, rs2 },
+                    (0b0000001, 0b100) => Instruction::Div    { rd, rs1, rs2 },
+                    (0b0000001, 0b101) => Instruction::Divu   { rd, rs1, rs2 },
+                    (0b0000001, 0b110) => Instruction::Rem    { rd, rs1, rs2 },
+                    (0b0000001, 0b111) => Instruction::Remu   { rd, rs1, rs2 },
+
                     _ => Instruction::Undefined(original_inst)
                 }
             }
@@ -148,6 +178,14 @@ impl Instruction {
                     (0b0000000, 0b001) => Instruction::Sllw { rd, rs1, rs2 },
                     (0b0000000, 0b101) => Instruction::Srlw { rd, rs1, rs2 },
                     (0b0100000, 0b101) => Instruction::Sraw { rd, rs1, rs2 },
+
+                    // M Extention
+
+                    (0b0000001, 0b000) => Instruction::Mulw  { rd, rs1, rs2 },
+                    (0b0000001, 0b100) => Instruction::Divw  { rd, rs1, rs2 },
+                    (0b0000001, 0b101) => Instruction::Divuw { rd, rs1, rs2 },
+                    (0b0000001, 0b110) => Instruction::Remw  { rd, rs1, rs2 },
+                    (0b0000001, 0b111) => Instruction::Remuw { rd, rs1, rs2 },
 
                     _ => Instruction::Undefined(original_inst)
                 }
@@ -348,12 +386,12 @@ impl Instruction {
 }
 
 #[derive(Debug)]
-struct RType {
-    funct7: u32,
-    funct3: u32,
-    rd: Register,
-    rs1: Register,
-    rs2: Register,
+pub struct RType {
+    pub funct7: u32,
+    pub funct3: u32,
+    pub rd: Register,
+    pub rs1: Register,
+    pub rs2: Register,
 }
 
 impl From<u32> for RType {
@@ -378,11 +416,11 @@ impl From<u32> for RType {
 }
 
 #[derive(Debug)]
-struct IType {
-    imm: i32,
-    rs1: Register,
-    funct3: u32,
-    rd: Register
+pub struct IType {
+    pub imm: i32,
+    pub rs1: Register,
+    pub funct3: u32,
+    pub rd: Register
 }
 
 impl From<u32> for IType {
@@ -403,11 +441,11 @@ impl From<u32> for IType {
 }
 
 #[derive(Debug)]
-struct SType {
-    imm: i32,
-    funct3: u32,
-    rs1: Register,
-    rs2: Register
+pub struct SType {
+    pub imm: i32,
+    pub funct3: u32,
+    pub rs1: Register,
+    pub rs2: Register
 }
 
 impl From<u32> for SType {
@@ -432,11 +470,11 @@ impl From<u32> for SType {
 }
 
 #[derive(Debug)]
-struct BType {
-    imm: i32,
-    funct3: u32,
-    rs1: Register,
-    rs2: Register
+pub struct BType {
+    pub imm: i32,
+    pub funct3: u32,
+    pub rs1: Register,
+    pub rs2: Register
 }
 
 impl From<u32> for BType {
@@ -464,9 +502,9 @@ impl From<u32> for BType {
 }
 
 #[derive(Debug)]
-struct UType {
-    imm: i32,
-    rd: Register
+pub struct UType {
+    pub imm: i32,
+    pub rd: Register
 }
 
 impl From<u32> for UType {
@@ -482,9 +520,9 @@ impl From<u32> for UType {
 }
 
 #[derive(Debug)]
-struct JType {
-    imm: i32,
-    rd: Register,
+pub struct JType {
+    pub imm: i32,
+    pub rd: Register,
 }
 
 impl From<u32> for JType {

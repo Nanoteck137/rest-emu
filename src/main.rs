@@ -1,6 +1,16 @@
 //! Rest-EMU is a RISC-V emulator so we can emulate and define a custom
 //! RISC-V cpu
 
+// TODO(patrik):
+//   - For rust to compile for RV64 we need to have the GC extentions
+//     implemented: G = I M A F D Zicsr Zifencei
+//                      x x       xxxxx
+//   - Implemented the M extentions (done)
+//   - Implemented the A extentions
+//   - Implemented the F extentions
+//   - Implemented the D extentions
+//   - Implemented the Zifencei extentions
+
 mod instruction;
 mod mmu;
 mod cpu;
@@ -33,7 +43,7 @@ fn main() {
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
     core.set_reg(Register::A0, 6);
-    core.set_reg(Register::A1, 5);
+    core.set_reg(Register::A1, -1i64 as u64);
 
     core.write_csr(0xfff, 0b111);
 
