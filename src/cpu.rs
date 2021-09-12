@@ -978,6 +978,28 @@ impl Core {
 
             // C Extention
 
+            // Hint,
+
+            // Quad 0
+            Instruction::CAddi4spn { rd, nzuimm } => {
+                let nzuimm = nzuimm as u64;
+
+                let value = self.reg(Register::Sp)
+                    .wrapping_add(nzuimm);
+                self.set_reg(rd, value);
+
+                CoreExit::Success
+            },
+            // CFld      { rd:  Register, rs1: Register, uimm: u32 },
+            // CLw       { rd:  Register, rs1: Register, uimm: u32 },
+            // CLd       { rd:  Register, rs1: Register, uimm: u32 },
+            // CFsd      { rs1: Register, rs2: Register, uimm: u32 },
+            // CSw       { rs1: Register, rs2: Register, uimm: u32 },
+            // CSd       { rs1: Register, rs2: Register, uimm: u32 },
+
+            // Quad 1
+            // CNop,
+
             Instruction::CAddi { reg, nzimm } => {
                 let rs1 = self.reg(reg);
 
@@ -986,6 +1008,98 @@ impl Core {
 
                 CoreExit::Success
             }
+
+            Instruction::CAddiw { reg, imm } => {
+                let rs1 = self.reg(reg) as u32;
+                let imm = imm as u32;
+
+                let value = rs1.wrapping_add(imm);
+                self.set_reg(reg, value as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::CLi { rd, imm } => {
+                let value = imm as i64 as u64;
+                self.set_reg(rd, value);
+
+                CoreExit::Success
+            },
+
+            Instruction::CAddi16sp { nzimm } => {
+                let nzimm = nzimm as i64 as u64;
+
+                let value = self.reg(Register::Sp)
+                    .wrapping_add(nzimm as i64 as u64);
+                self.set_reg(Register::Sp, value);
+
+                CoreExit::Success
+            },
+            // CLui      { rd:  Register, nzimm: i32 },
+            // CAndi     { reg: Register, imm: i32 },
+            // CSub      { reg: Register, rs2: Register },
+            // CXor      { reg: Register, rs2: Register },
+            // COr       { reg: Register, rs2: Register },
+            // CAnd      { reg: Register, rs2: Register },
+            // CSubw     { reg: Register, rs2: Register },
+            // CAddw     { reg: Register, rs2: Register },
+            Instruction::CJ { imm } => {
+                let imm = imm as i64 as u64;
+
+                let target = current_pc
+                    .wrapping_add(imm);
+                self.set_reg(Register::Pc, target);
+
+                CoreExit::Success
+            },
+            // CBeqz     { rs1: Register, imm: i32 },
+            // CBnez     { rs1: Register, imm: i32 },
+
+            // Quad 2
+            // CSlli  { reg: Register, nzuimm: u32 },
+            // CFldsp { rd:  Register, uimm:   u32 },
+            // CLwsp  { rd:  Register, uimm:   u32 },
+            Instruction::CLdsp { rd, uimm } => {
+                let uimm = uimm as u64;
+
+                let addr = self.reg(Register::Sp)
+                    .wrapping_add(uimm);
+
+                let value = self.mmu.read_u64(addr);
+                self.set_reg(rd, value);
+
+                CoreExit::Success
+            },
+
+            Instruction::CJr { rs1 } => {
+                let target = self.reg(rs1);
+                self.set_reg(Register::Pc, target);
+
+                CoreExit::Success
+            },
+
+            Instruction::CMv { rd, rs2 } => {
+                let value = self.reg(rs2);
+                self.set_reg(rd, value);
+
+                CoreExit::Success
+            },
+            // CEbreak,
+            // CJalr  { rs1: Register },
+            // CAdd   { reg: Register, rs2: Register },
+            // CFsdsp { rs2: Register, uimm: u32 },
+            // CSwsp  { rs2: Register, uimm: u32 },
+            Instruction::CSdsp { rs2, uimm } => {
+                let rs2 = self.reg(rs2);
+
+                let uimm = uimm as u64;
+                let addr = self.reg(Register::Sp)
+                    .wrapping_add(uimm);
+
+                self.mmu.write_u64(addr, rs2);
+
+                CoreExit::Success
+            },
 
             Instruction::Undefined(inst) => {
                 let opcode = inst & 0b1111111;

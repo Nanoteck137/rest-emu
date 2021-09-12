@@ -368,9 +368,6 @@ impl Instruction {
                                 nzimm6 << 6 | nzimm5 << 5 | nzimm4 << 4;
                             let nzimm = ((nzimm as i32) << 22) >> 22;
 
-                            println!("Nzimm: {}", nzimm);
-                            panic!();
-
                             return if nzimm == 0 {
                                 panic!("Reserved Instruction");
                             } else {
