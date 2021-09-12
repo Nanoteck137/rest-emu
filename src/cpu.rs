@@ -124,6 +124,48 @@ impl From<u32> for Register {
     }
 }
 
+impl From<u16> for Register {
+    fn from(value: u16) -> Self {
+        match value {
+            0 => Register::Zero,
+            1 => Register::Ra,
+            2 => Register::Sp,
+            3 => Register::Gp,
+            4 => Register::Tp,
+            5 => Register::T0,
+            6 => Register::T1,
+            7 => Register::T2,
+            8 => Register::S0,
+            9 => Register::S1,
+            10 => Register::A0,
+            11 => Register::A1,
+            12 => Register::A2,
+            13 => Register::A3,
+            14 => Register::A4,
+            15 => Register::A5,
+            16 => Register::A6,
+            17 => Register::A7,
+            18 => Register::S2,
+            19 => Register::S3,
+            20 => Register::S4,
+            21 => Register::S5,
+            22 => Register::S6,
+            23 => Register::S7,
+            24 => Register::S8,
+            25 => Register::S9,
+            26 => Register::S10,
+            27 => Register::S11,
+            28 => Register::T3,
+            29 => Register::T4,
+            30 => Register::T5,
+            31 => Register::T6,
+            32 => Register::Pc,
+
+            _ => panic!("Unknown register: {}", value),
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CoreExit {
     Success,
@@ -151,8 +193,18 @@ impl Core {
     pub fn step(&mut self) -> CoreExit {
         let current_pc = self.reg(Register::Pc);
 
-        let inst = self.fetch_u32();
-        let inst = Instruction::decode(inst);
+        let inst = self.fetch_u16();
+        let is_compressed = (inst & 0b11) != 0b11;
+
+        let inst = if is_compressed {
+            self.set_reg(Register::Pc, self.reg(Register::Pc) + 2);
+            Instruction::decode_compressed(inst)
+        } else {
+            let inst = self.fetch_u32();
+            self.set_reg(Register::Pc, self.reg(Register::Pc) + 4);
+            Instruction::decode(inst)
+        };
+
         println!("Instruction: {:?}", inst);
 
         return match inst {
@@ -924,6 +976,17 @@ impl Core {
                 CoreExit::Success
             },
 
+            // C Extention
+
+            Instruction::CAddi { reg, nzimm } => {
+                let rs1 = self.reg(reg);
+
+                let value = rs1.wrapping_add(nzimm as i64 as u64);
+                self.set_reg(reg, value);
+
+                CoreExit::Success
+            }
+
             Instruction::Undefined(inst) => {
                 let opcode = inst & 0b1111111;
                 let typ = Instruction::decode_type(opcode);
@@ -973,6 +1036,14 @@ impl Core {
                 //               exists
                 panic!("Undefined Instruction: {:#x} - opcode: 0b{:07b}",
                        inst, opcode);
+            },
+
+            Instruction::UndefinedCompressed(inst) => {
+                let quad = inst & 0b11;
+                let funct3 = (inst >> 13) & 0b111;
+                panic!("Undefined C Instruction - quad: 0b{:02b} \
+                       funct3: 0b{:03b} {:#x} at PC: {:#x}",
+                       quad, funct3, inst, current_pc);
             }
 
             _ => unimplemented!("Unimplemented instruction: {:?}", inst),
@@ -1001,10 +1072,16 @@ impl Core {
         self.csr_registers[csr as usize]
     }
 
+    fn fetch_u16(&mut self) -> u16 {
+        let pc = self.reg(Register::Pc);
+        let result = self.mmu.read_u16(pc);
+
+        result
+    }
+
     fn fetch_u32(&mut self) -> u32 {
         let pc = self.reg(Register::Pc);
         let result = self.mmu.read_u32(pc);
-        self.set_reg(Register::Pc, pc + 4);
 
         result
     }

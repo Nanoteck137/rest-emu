@@ -111,7 +111,52 @@ pub enum Instruction {
     Csrrsi { rd: Register, uimm: u32, csr: u16 },
     Csrrci { rd: Register, uimm: u32, csr: u16 },
 
+    // C Extention
+    Hint,
+
+    // Quad 0
+    CAddi4spn { rd:  Register, nzuimm: u32 },
+    CFld      { rd:  Register, rs1: Register, uimm: u32 },
+    CLw       { rd:  Register, rs1: Register, uimm: u32 },
+    CLd       { rd:  Register, rs1: Register, uimm: u32 },
+    CFsd      { rs1: Register, rs2: Register, uimm: u32 },
+    CSw       { rs1: Register, rs2: Register, uimm: u32 },
+    CSd       { rs1: Register, rs2: Register, uimm: u32 },
+
+    // Quad 1
+    CNop,
+    CAddi     { reg: Register, nzimm: i32 },
+    CAddiw    { reg: Register, imm: i32 },
+    CLi       { rd:  Register, imm: i32 },
+    CAddi16sp { nzimm: i32 },
+    CLui      { rd:  Register, nzimm: i32 },
+    CAndi     { reg: Register, imm: i32 },
+    CSub      { reg: Register, rs2: Register },
+    CXor      { reg: Register, rs2: Register },
+    COr       { reg: Register, rs2: Register },
+    CAnd      { reg: Register, rs2: Register },
+    CSubw     { reg: Register, rs2: Register },
+    CAddw     { reg: Register, rs2: Register },
+    CJ        { imm: i32 },
+    CBeqz     { rs1: Register, imm: i32 },
+    CBnez     { rs1: Register, imm: i32 },
+
+    // Quad 2
+    CSlli  { reg: Register, nzuimm: u32 },
+    CFldsp { rd:  Register, uimm:   u32 },
+    CLwsp  { rd:  Register, uimm:   u32 },
+    CLdsp  { rd:  Register, uimm:   u32 },
+    CJr    { rs1: Register },
+    CMv    { rd:  Register, rs2: Register },
+    CEbreak,
+    CJalr  { rs1: Register },
+    CAdd   { reg: Register, rs2: Register },
+    CFsdsp { rs2: Register, uimm: u32 },
+    CSwsp  { rs2: Register, uimm: u32 },
+    CSdsp  { rs2: Register, uimm: u32 },
+
     Undefined(u32),
+    UndefinedCompressed(u16),
 }
 
 impl Instruction {
@@ -134,6 +179,485 @@ impl Instruction {
 
     pub fn decode_type(opcode: u32) -> Option<Type> {
          TYPE_MAPPING_TABLE[opcode as usize]
+    }
+
+    fn reg_from_prime(prime: u16) -> Register {
+        match prime {
+            0b000 => Register::S0,
+            0b001 => Register::S1,
+            0b010 => Register::A0,
+            0b011 => Register::A1,
+            0b100 => Register::A2,
+            0b101 => Register::A3,
+            0b110 => Register::A4,
+            0b111 => Register::A5,
+
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn decode_compressed(inst: u16) -> Self {
+        let quad = inst & 0b11;
+        return match quad {
+            0b00 => {
+                let funct3 = (inst >> 13) & 0b111;
+
+                return match funct3 {
+                    0b000 => {
+                        let nzuimm45 = (inst >> 11) & 0b11;
+                        let nzuimm69 = (inst >> 7)  & 0b1111;
+                        let nzuimm2  = (inst >> 6) & 0b1;
+                        let nzuimm3  = (inst >> 5) & 0b1;
+                        let nzuimm = nzuimm69 << 6 | nzuimm45 << 4 |
+                            nzuimm3 << 3 | nzuimm2 << 2;
+                        let rd = (inst >> 2) & 0b111;
+
+                        if nzuimm == 0 && rd == 0 {
+                            // NOTE(patrik): Illegal Instruction
+                            Instruction::UndefinedCompressed(inst)
+                        } else {
+                            let rd = Self::reg_from_prime(rd);
+                            let nzuimm = nzuimm as u32;
+                            Instruction::CAddi4spn { rd, nzuimm }
+                        }
+                    },
+
+                    0b001 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm67 = (inst >> 5) & 0b11;
+                        let uimm = uimm67 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rd = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CFld { rd, rs1, uimm }
+                    },
+
+                    0b010 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm2 = (inst >> 6) & 0b1;
+                        let uimm6 = (inst >> 5) & 0b1;
+                        let uimm = uimm6 << 6 | uimm35 << 3 | uimm2 << 2;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rd = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CLw { rd, rs1, uimm }
+                    },
+
+                    0b011 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm67 = (inst >> 5) & 0b11;
+                        let uimm = uimm67 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rd = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CLd { rd, rs1, uimm }
+                    }
+
+                    0b101 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm67 = (inst >> 5) & 0b11;
+                        let uimm = uimm67 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rs2 = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CFsd { rs1, rs2, uimm }
+                    }
+
+                    0b110 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm2 = (inst >> 6) & 0b1;
+                        let uimm6 = (inst >> 5) & 0b1;
+                        let uimm = uimm6 << 6 | uimm35 << 3 | uimm2 << 2;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rs2 = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CSw { rs1, rs2, uimm }
+                    },
+
+                    0b111 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm67 = (inst >> 5) & 0b11;
+                        let uimm = uimm67 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+                        let rs2 = Self::reg_from_prime((inst >> 2) & 0b111);
+
+                        Instruction::CSd { rs1, rs2, uimm }
+                    }
+
+                    _ => Instruction::UndefinedCompressed(inst),
+                };
+            },
+
+            0b01 => {
+                let funct3 = (inst >> 13) & 0b111;
+
+                match funct3 {
+                    0b000 => {
+                        let nzimm5 = (inst >> 12) & 0b1;
+                        let nzimm04 = (inst >> 2) & 0b11111;
+                        let nzimm = nzimm5 << 5 | nzimm04;
+                        let nzimm = ((nzimm as i32) << 26) >> 26;
+
+                        let reg = Register::from((inst >> 7) & 0b11111);
+                        return if reg == Register::Zero {
+                            if nzimm != 0 {
+                                Instruction::Hint
+                            } else {
+                                Instruction::CNop
+                            }
+                        } else {
+                            if nzimm == 0 {
+                                Instruction::Hint
+                            } else {
+                                Instruction::CAddi { reg, nzimm }
+                            }
+                        };
+                    },
+
+                    0b001 => {
+                        let imm5 = (inst >> 12) & 0b1;
+                        let imm04 = (inst >> 2) & 0b11111;
+                        let imm = imm5 << 5 | imm04;
+                        let imm = ((imm as i32) << 26) >> 26;
+
+                        let reg = Register::from((inst >> 7) & 0b11111);
+
+                        if reg == Register::Zero {
+                            panic!("Reserved instruction");
+                        } else {
+                            Instruction::CAddiw { reg, imm }
+                        }
+                    }
+
+                    0b010 => {
+                        let imm5 = (inst >> 12) & 0b1;
+                        let imm04 = (inst >> 2) & 0b11111;
+                        let imm = imm5 << 5 | imm04;
+                        let imm = ((imm as i32) << 26) >> 26;
+
+                        let rd = Register::from((inst >> 7) & 0b11111);
+
+                        if rd == Register::Zero {
+                            Instruction::Hint
+                        } else {
+                            Instruction::CLi { rd, imm }
+                        }
+                    }
+
+                    0b011 => {
+                        let rd = Register::from((inst >> 7) & 0b11111);
+                        if rd == Register::Sp {
+                            let nzimm9  = (inst >> 12) & 0b1;
+                            let nzimm4  = (inst >> 6)  & 0b1;
+                            let nzimm6  = (inst >> 5)  & 0b1;
+                            let nzimm87 = (inst >> 3)  & 0b11;
+                            let nzimm5  = (inst >> 2)  & 0b1;
+                            let nzimm = nzimm9 << 9 | nzimm87 << 7 |
+                                nzimm6 << 6 | nzimm5 << 5 | nzimm4 << 4;
+                            let nzimm = ((nzimm as i32) << 22) >> 22;
+
+                            println!("Nzimm: {}", nzimm);
+                            panic!();
+
+                            return if nzimm == 0 {
+                                panic!("Reserved Instruction");
+                            } else {
+                                Instruction::CAddi16sp { nzimm }
+                            };
+                        } else {
+                            return if rd == Register::Zero {
+                                Instruction::Hint
+                            } else {
+                                let nzimm17   = ((inst >> 12) & 0b1) as u32;
+                                let nzimm1612 = ((inst >> 2)  & 0b11111) as u32;
+
+                                let nzimm = nzimm17 << 17 | nzimm1612 << 12;
+                                let nzimm = ((nzimm as i32) << 14) >> 14;
+
+                                // TODO(patrik): Check nzimm is correct
+                                panic!();
+
+                                return if nzimm == 0 {
+                                    panic!("Reserved Instruction");
+                                } else {
+                                    Instruction::CLui { rd, nzimm }
+                                };
+                            };
+                        }
+                    }
+
+                    0b100 => {
+                        let funct2 = (inst >> 10) & 0b11;
+                        return match funct2 {
+                            0b00 => {
+                                panic!();
+                                Instruction::Hint
+                            },
+
+                            0b01 => {
+                                panic!();
+                                Instruction::Hint
+                            },
+
+                            0b10 => {
+                                let imm5 = (inst >> 12) & 0b1;
+                                let imm04 = (inst >> 2) & 0b11111;
+                                let imm = imm5 << 5 | imm04;
+                                let imm = ((imm as i32) << 26) >> 26;
+
+                                let reg =
+                                    Self::reg_from_prime((inst >> 7) & 0b111);
+
+                                Instruction::CAndi { reg, imm }
+                            },
+                            0b11 => {
+                                let funct2 = (inst >> 5) & 0b11;
+                                let bit12 = (inst >> 12) & 0b1;
+
+                                let reg =
+                                    Self::reg_from_prime((inst >> 7) & 0b111);
+
+                                let rs2 =
+                                    Self::reg_from_prime((inst >> 2) & 0b111);
+
+                                match (bit12, funct2) {
+                                    (0, 0b00) =>
+                                        Instruction::CSub { reg, rs2 },
+                                    (0, 0b01) =>
+                                        Instruction::CXor { reg, rs2 },
+                                    (0, 0b10) =>
+                                        Instruction::COr { reg, rs2 },
+                                    (0, 0b11) =>
+                                        Instruction::CAnd { reg, rs2 },
+
+                                    (1, 0b00) =>
+                                        Instruction::CSubw { reg, rs2 },
+                                    (1, 0b01) =>
+                                        Instruction::CAddw { reg, rs2 },
+                                    (1, 0b10) => panic!("Reserved instruction"),
+                                    (1, 0b11) => panic!("Reserved instruction"),
+
+                                    _ => unreachable!(),
+                                }
+                            },
+
+                            _ => unreachable!(),
+                        };
+                    },
+
+                    0b101 => {
+                        let imm11 = (inst >> 12) & 0b1;
+                        let imm4  = (inst >> 11) & 0b1;
+                        let imm89 = (inst >> 9)  & 0b11;
+                        let imm10 = (inst >> 8)  & 0b1;
+                        let imm6  = (inst >> 7)  & 0b1;
+                        let imm7  = (inst >> 6)  & 0b1;
+                        let imm13 = (inst >> 3)  & 0b111;
+                        let imm5  = (inst >> 2)  & 0b1;
+
+                        let imm = imm11 << 11 | imm10 << 10 | imm89 << 8 |
+                            imm7 << 7 | imm6 << 6 | imm5 << 5 |
+                            imm4 << 4 | imm13 << 1;
+                        let imm = ((imm as i32) << 20) >> 20;
+
+                        Instruction::CJ { imm }
+                    }
+
+                    0b110 => {
+                        let imm8  = (inst >> 12) & 0b1;
+                        let imm34 = (inst >> 10) & 0b11;
+                        let imm67 = (inst >> 5)  & 0b11;
+                        let imm12 = (inst >> 3)  & 0b11;
+                        let imm5  = (inst >> 2)  & 0b1;
+
+                        let imm = imm8 << 8 | imm67 << 6 | imm5 << 5 |
+                            imm34 << 3 | imm12 << 1;
+                        let imm = ((imm as i32) << 23) >> 23;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+
+                        Instruction::CBeqz { rs1, imm }
+                    }
+
+                    0b111 => {
+                        let imm8  = (inst >> 12) & 0b1;
+                        let imm34 = (inst >> 10) & 0b11;
+                        let imm67 = (inst >> 5)  & 0b11;
+                        let imm12 = (inst >> 3)  & 0b11;
+                        let imm5  = (inst >> 2)  & 0b1;
+
+                        let imm = imm8 << 8 | imm67 << 6 | imm5 << 5 |
+                            imm34 << 3 | imm12 << 1;
+                        let imm = ((imm as i32) << 23) >> 23;
+
+                        let rs1 = Self::reg_from_prime((inst >> 7) & 0b111);
+
+                        Instruction::CBnez { rs1, imm }
+                    }
+
+                    _ => Instruction::UndefinedCompressed(inst),
+                }
+            },
+
+            0b10 => {
+                let funct3 = (inst >> 13) & 0b111;
+
+                match funct3 {
+                    0b000 => {
+                        let nzuimm5  = (inst >> 12) & 0b1;
+                        let nzuimm04 = (inst >> 2) & 0b11111;
+
+                        let nzuimm = nzuimm5 << 5 | nzuimm04;
+                        let nzuimm = nzuimm as u32;
+
+                        let reg = Register::from((inst >> 7) & 0b11111);
+
+                        return if reg == Register::Zero {
+                            Instruction::Hint
+                        } else if nzuimm == 0 {
+                            Instruction::Hint
+                        } else {
+                            Instruction::CSlli { reg, nzuimm }
+                        };
+                    },
+
+                    0b001 => {
+                        let uimm5 = (inst >> 12) & 0b1;
+                        let uimm34 = (inst >> 5) & 0b11;
+                        let uimm68 = (inst >> 2) & 0b111;
+
+                        let uimm = uimm68 << 6 | uimm5 << 5 | uimm34 << 3;
+                        let uimm = uimm as u32;
+
+                        let rd = Register::from((inst >> 7) & 0b11111);
+
+                        Instruction::CFldsp { rd, uimm }
+                    },
+
+                    0b010 => {
+                        let uimm5  = (inst >> 12) & 0b1;
+                        let uimm24 = (inst >> 4) & 0b111;
+                        let uimm67 = (inst >> 2) & 0b11;
+
+                        let uimm = uimm67 << 6 | uimm5 << 5 | uimm24 << 2;
+                        let uimm = uimm as u32;
+
+                        let rd = Register::from((inst >> 7) & 0b11111);
+
+                        if rd == Register::Zero {
+                            panic!("Reserved instruction");
+                        }
+
+                        Instruction::CLwsp { rd, uimm }
+                    },
+
+                    0b011 => {
+                        let uimm5  = (inst >> 12) & 0b1;
+                        let uimm34 = (inst >> 5)  & 0b11;
+                        let uimm68 = (inst >> 2)  & 0b111;
+
+                        let uimm = uimm68 << 6 | uimm5 << 5 | uimm34 << 3;
+                        let uimm = uimm as u32;
+
+                        let rd = Register::from((inst >> 7) & 0b11111);
+
+                        if rd == Register::Zero {
+                            panic!("Reserved Instruction");
+                        }
+
+                        Instruction::CLdsp { rd, uimm }
+                    },
+
+                    0b100 => {
+                        let bit12 = (inst >> 12) & 0b1;
+
+                        let reg = (inst >> 7) & 0b11111;
+                        let rs2 = (inst >> 2) & 0b11111;
+
+                        return if bit12 == 0 {
+                            return if rs2 == 0 {
+                                let rs1 = Register::from(reg);
+
+                                Instruction::CJr { rs1 }
+                            } else {
+                                let rd = Register::from(reg);
+                                let rs2 = Register::from(rs2);
+
+                                Instruction::CMv { rd, rs2 }
+                            };
+                        } else {
+                            return if reg == 0 && rs2 == 0 {
+                                Instruction::CEbreak
+                            } else if rs2 == 0 {
+                                let rs1 = Register::from(reg);
+                                Instruction::CJalr { rs1 }
+                            } else {
+                                let reg = Register::from(reg);
+                                let rs2 = Register::from(rs2);
+
+                                return if reg == Register::Zero {
+                                    Instruction::Hint
+                                } else {
+                                    Instruction::CAdd { reg, rs2 }
+                                };
+                            };
+                        };
+                    },
+
+                    0b101 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm68 = (inst >> 7) & 0b111;
+
+                        let uimm = uimm68 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs2 = Register::from((inst >> 2) & 0b11111);
+
+                        Instruction::CFsdsp { rs2, uimm }
+                    },
+
+                    0b110 => {
+                        let uimm25 = (inst >> 9) & 0b1111;
+                        let uimm67 = (inst >> 7) & 0b11;
+
+                        let uimm = uimm67 << 6 | uimm25 << 2;
+                        let uimm = uimm as u32;
+
+                        let rs2 = Register::from((inst >> 2) & 0b11111);
+
+                        Instruction::CSwsp { rs2, uimm }
+                    },
+
+                    0b111 => {
+                        let uimm35 = (inst >> 10) & 0b111;
+                        let uimm68 = (inst >> 7) & 0b111;
+
+                        let uimm = uimm68 << 6 | uimm35 << 3;
+                        let uimm = uimm as u32;
+
+                        let rs2 = Register::from((inst >> 2) & 0b11111);
+
+                        Instruction::CSdsp { rs2, uimm }
+                    }
+
+                    _ => unreachable!(),
+                }
+            },
+
+            _ => Instruction::UndefinedCompressed(inst)
+        };
     }
 
     fn decode_r(original_inst: u32, opcode: u32) -> Self {
