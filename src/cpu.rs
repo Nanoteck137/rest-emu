@@ -882,7 +882,7 @@ impl Core {
                 CoreExit::Success
             },
 
-            // Fence { rd: Register, rs1: Register, imm: i32 } => {},
+            Instruction::Fence { rd, rs1, imm } => CoreExit::Success,
 
             Instruction::Ecall => CoreExit::Ecall,
             Instruction::Ebreak => CoreExit::Ebreak,
@@ -980,11 +980,22 @@ impl Core {
 
             // Lrw      { rd: Register, rs1: Register, aq: bool, rl: bool },
             // Scw      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amoswapw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+
+            Instruction::Amoswapw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                self.mmu.write_u32(addr, rs2);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
             Instruction::Amoaddw { rd, rs1, rs2, aq, rl } => {
                 let rs2 = self.reg(rs2) as u32;
                 let addr = self.reg(rs1);
-
                 let old = self.mmu.read_u32(addr);
 
                 let value = old.wrapping_add(rs2);
@@ -994,13 +1005,98 @@ impl Core {
 
                 CoreExit::Success
             },
-            // Amoxorw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amoandw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amoorw   { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amominw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amomaxw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amominuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
-            // Amomaxuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+
+            Instruction::Amoxorw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = old ^ rs2;
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amoandw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = old & rs2;
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amoorw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = old | rs2;
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amominw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = std::cmp::min(old as i32, rs2 as i32);
+                self.mmu.write_u32(addr, value as u32);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amomaxw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = std::cmp::max(old as i32, rs2 as i32);
+                self.mmu.write_u32(addr, value as u32);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amominuw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = std::cmp::min(old, rs2);
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
+            Instruction::Amomaxuw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+                let old = self.mmu.read_u32(addr);
+
+                let value = std::cmp::max(old, rs2);
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+
             // Lrd      { rd: Register, rs1: Register, aq: bool, rl: bool},
             // Scd      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
             // Amoswapd { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },

@@ -8,7 +8,7 @@ static TEST: AtomicI32 = AtomicI32::new(123);
 
 #[no_mangle]
 fn _start(a: i32) -> i32 {
-    let value = TEST.fetch_add(1, Ordering::SeqCst);
+    let value = TEST.load(Ordering::SeqCst);
 
     a + value
 }

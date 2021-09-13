@@ -68,6 +68,6 @@ fn main() {
     let value = core.read_csr(0xfff);
     println!("CSR Reg: {:#b}", value);
 
-    let value = core.mmu.read_u32(0x27c);
+    let value = core.mmu.read_u32(0x36c);
     println!("Value: {}", value);
 }
