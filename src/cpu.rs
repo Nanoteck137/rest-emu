@@ -177,7 +177,7 @@ pub struct Core {
     registers: [u64; MAX_REGISTERS],
     csr_registers: [u64; MAX_CSR_REGISTERS],
 
-    mmu: Mmu
+    pub mmu: Mmu
 }
 
 impl Core {
@@ -976,6 +976,43 @@ impl Core {
                 CoreExit::Success
             },
 
+            // A Extention
+
+            // Lrw      { rd: Register, rs1: Register, aq: bool, rl: bool },
+            // Scw      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoswapw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            Instruction::Amoaddw { rd, rs1, rs2, aq, rl } => {
+                let rs2 = self.reg(rs2) as u32;
+                let addr = self.reg(rs1);
+
+                let old = self.mmu.read_u32(addr);
+
+                let value = old.wrapping_add(rs2);
+                self.mmu.write_u32(addr, value);
+
+                self.set_reg(rd, old as i32 as i64 as u64);
+
+                CoreExit::Success
+            },
+            // Amoxorw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoandw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoorw   { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amominw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amomaxw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amominuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amomaxuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Lrd      { rd: Register, rs1: Register, aq: bool, rl: bool},
+            // Scd      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoswapd { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoaddd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoxord  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoandd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amoord   { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amomind  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amomaxd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amominud { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+            // Amomaxud { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+
             // C Extention
 
             Instruction::Hint => CoreExit::Success,
@@ -1350,7 +1387,8 @@ impl Core {
                        quad, funct3, inst, current_pc);
             }
 
-            _ => unimplemented!("Unimplemented instruction: {:?}", inst),
+            _ => unimplemented!("Unimplemented instruction: {:?} at PC: {:#x}",
+                                inst, current_pc),
         };
     }
 

@@ -38,12 +38,19 @@ fn main() {
     let mut mmu = Mmu::new(1 * 1024 * 1024);
     load_binary_program(&mut mmu);
 
+    let entry = std::fs::read_to_string("test/rust-test.entry")
+        .expect("Failed to find a entry file");
+    let entry = entry.trim_end_matches('\n');
+    let entry = u64::from_str_radix(&entry[2..], 16)
+        .expect("Failed to parse entry to int");
+
     let mut core = Core::new(mmu);
+    core.set_reg(Register::Pc, entry);
     core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
     core.set_reg(Register::A0, 123);
-    core.set_reg(Register::A1, 321);
+    // core.set_reg(Register::A1, 321);
 
     core.write_csr(0xfff, 0b111);
 
@@ -60,4 +67,7 @@ fn main() {
 
     let value = core.read_csr(0xfff);
     println!("CSR Reg: {:#b}", value);
+
+    let value = core.mmu.read_u32(0x27c);
+    println!("Value: {}", value);
 }

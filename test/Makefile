@@ -4,6 +4,7 @@ rust-test:
 	rustc main.rs -C link-args=-Tlinker.ld --target=riscv64imac-unknown-none-elf -o rust-test.elf
 	rustc main.rs -C link-args=-Tlinker.ld --emit=asm --target=riscv64imac-unknown-none-elf -o rust-test.s
 	riscv64-unknown-elf-objcopy -O binary rust-test.elf rust-test.bin
+	(readelf -h rust-test.elf | grep "Entry point address:" | cut -d':' -f2 | xargs) > rust-test.entry
 
 c-test:
 	riscv64-unknown-elf-gcc -march=rv64imc -ffreestanding -nostdlib -Tlinker.ld main.c -o c-test.elf
@@ -12,6 +13,6 @@ c-test:
 
 clean:
 	rm c-test.elf c-test.bin c-test.s
-	rm rust-test.elf rust-test.bin
+	rm rust-test.elf rust-test.bin rust-test.s
 
 .PHONY: c-test rust-test clean

@@ -111,6 +111,32 @@ pub enum Instruction {
     Csrrsi { rd: Register, uimm: u32, csr: u16 },
     Csrrci { rd: Register, uimm: u32, csr: u16 },
 
+    // A Extention
+    // 0b0101111
+    Lrw      { rd: Register, rs1: Register, aq: bool, rl: bool },
+    Scw      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoswapw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoaddw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoxorw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoandw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoorw   { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amominw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amomaxw  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amominuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amomaxuw { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Lrd      { rd: Register, rs1: Register, aq: bool, rl: bool},
+    Scd      { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoswapd { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoaddd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoxord  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoandd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amoord   { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amomind  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amomaxd  { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amominud { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+    Amomaxud { rd: Register, rs1: Register, rs2: Register, aq: bool, rl: bool },
+
+
     // C Extention
     Hint,
 
@@ -710,7 +736,45 @@ impl Instruction {
 
                     _ => Instruction::Undefined(original_inst)
                 }
-            }
+            },
+
+            0b0101111 => {
+                let funct5 = inst.funct7 >> 2;
+                let aq = (inst.funct7 & 0b10) == 0b10;
+                let rl = (inst.funct7 & 0b01) == 0b01;
+
+                let rd  = inst.rd;
+                let rs1 = inst.rs1;
+                let rs2 = inst.rs2;
+
+                return match (funct5, inst.funct3) {
+                    (0b00010, 0b010) => Instruction::Lrw { rd, rs1, aq, rl },
+                    (0b00011, 0b010) => Instruction::Scw      { rd, rs1, rs2, aq, rl },
+                    (0b00001, 0b010) => Instruction::Amoswapw { rd, rs1, rs2, aq, rl },
+                    (0b00000, 0b010) => Instruction::Amoaddw  { rd, rs1, rs2, aq, rl },
+                    (0b00100, 0b010) => Instruction::Amoxorw  { rd, rs1, rs2, aq, rl },
+                    (0b01100, 0b010) => Instruction::Amoandw  { rd, rs1, rs2, aq, rl },
+                    (0b01000, 0b010) => Instruction::Amoorw   { rd, rs1, rs2, aq, rl },
+                    (0b10000, 0b010) => Instruction::Amominw  { rd, rs1, rs2, aq, rl },
+                    (0b10100, 0b010) => Instruction::Amomaxw  { rd, rs1, rs2, aq, rl },
+                    (0b11000, 0b010) => Instruction::Amominuw { rd, rs1, rs2, aq, rl },
+                    (0b11100, 0b010) => Instruction::Amomaxuw { rd, rs1, rs2, aq, rl },
+
+                    (0b00010, 0b011) => Instruction::Lrd      { rd, rs1, aq, rl },
+                    (0b00011, 0b011) => Instruction::Scd      { rd, rs1, rs2, aq, rl },
+                    (0b00001, 0b011) => Instruction::Amoswapd { rd, rs1, rs2, aq, rl },
+                    (0b00000, 0b011) => Instruction::Amoaddd  { rd, rs1, rs2, aq, rl },
+                    (0b00100, 0b011) => Instruction::Amoxord  { rd, rs1, rs2, aq, rl },
+                    (0b01100, 0b011) => Instruction::Amoandd  { rd, rs1, rs2, aq, rl },
+                    (0b01000, 0b011) => Instruction::Amoord   { rd, rs1, rs2, aq, rl },
+                    (0b10000, 0b011) => Instruction::Amomind  { rd, rs1, rs2, aq, rl },
+                    (0b10100, 0b011) => Instruction::Amomaxd  { rd, rs1, rs2, aq, rl },
+                    (0b11000, 0b011) => Instruction::Amominud { rd, rs1, rs2, aq, rl },
+                    (0b11100, 0b011) => Instruction::Amomaxud { rd, rs1, rs2, aq, rl },
+
+                    _ => Instruction::Undefined(original_inst)
+                };
+            },
 
             _ => Instruction::Undefined(original_inst)
         }
@@ -1114,7 +1178,7 @@ static TYPE_MAPPING_TABLE: [Option<Type>; 128] = [
     None,          // 0b0101100
     None,          // 0b0101101
     None,          // 0b0101110
-    None,          // 0b0101111
+    Some(Type::R), // 0b0101111
     None,          // 0b0110000
     None,          // 0b0110001
     None,          // 0b0110010

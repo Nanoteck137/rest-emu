@@ -2,3 +2,4 @@
 /test/*.elf
 /test/*.bin
 /test/*.s
+/test/*.entry
