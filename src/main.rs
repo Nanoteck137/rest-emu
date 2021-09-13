@@ -56,7 +56,7 @@ fn main() {
 
     loop {
         let res = core.step();
-        // println!("Exit: {:#?}", res);
+        println!("Exit: {:#?}", res);
 
         if core.reg(Register::Pc) == 0xffff1337 {
             break;

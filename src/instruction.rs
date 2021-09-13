@@ -409,9 +409,6 @@ impl Instruction {
                                 let nzimm = nzimm17 << 17 | nzimm1612 << 12;
                                 let nzimm = ((nzimm as i32) << 14) >> 14;
 
-                                // TODO(patrik): Check nzimm is correct
-                                panic!();
-
                                 return if nzimm == 0 {
                                     panic!("Reserved Instruction");
                                 } else {
@@ -425,12 +422,10 @@ impl Instruction {
                         let funct2 = (inst >> 10) & 0b11;
                         return match funct2 {
                             0b00 => {
-                                panic!();
                                 Instruction::Hint
                             },
 
                             0b01 => {
-                                panic!();
                                 Instruction::Hint
                             },
 
@@ -610,7 +605,7 @@ impl Instruction {
                         let rs2 = (inst >> 2) & 0b11111;
 
                         return if bit12 == 0 {
-                            return if rs2 == 0 {
+                            if rs2 == 0 {
                                 let rs1 = Register::from(reg);
 
                                 Instruction::CJr { rs1 }
@@ -619,7 +614,7 @@ impl Instruction {
                                 let rs2 = Register::from(rs2);
 
                                 Instruction::CMv { rd, rs2 }
-                            };
+                            }
                         } else {
                             return if reg == 0 && rs2 == 0 {
                                 Instruction::CEbreak
