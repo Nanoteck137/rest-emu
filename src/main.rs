@@ -3,13 +3,13 @@
 
 // TODO(patrik):
 //   - For rust to compile for RV64 we need to have the GC extentions
-//     implemented: G = I M A F D Zicsr Zifencei
-//                      x x       xxxxx
-//   - Implemented the M extentions (done)
-//   - Implemented the A extentions
-//   - Implemented the F extentions
-//   - Implemented the D extentions
-//   - Implemented the Zifencei extentions
+//     implement: G = I M A F D Zicsr Zifencei
+//                    x x x     xxxxx
+//   - Implement the M extentions (done)
+//   - Implement the A extentions
+//   - Implement the F extentions
+//   - Implement the D extentions
+//   - Implement the Zifencei extentions
 
 mod instruction;
 mod mmu;
@@ -22,7 +22,7 @@ fn load_binary_program(mmu: &mut Mmu) {
     use std::fs::File;
     use std::io::Read;
 
-    let mut file = File::open("test/test.bin")
+    let mut file = File::open("test/rust-test.bin")
         .expect("Failed to load test binary");
     let mut data = Vec::new();
     file.read_to_end(&mut data)
@@ -42,8 +42,8 @@ fn main() {
     core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
 
-    core.set_reg(Register::A0, 5);
-    core.set_reg(Register::A1, 6);
+    core.set_reg(Register::A0, 123);
+    core.set_reg(Register::A1, 321);
 
     core.write_csr(0xfff, 0b111);
 

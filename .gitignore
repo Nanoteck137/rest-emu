@@ -1,4 +1,4 @@
 /target
-/test/a.out
-/test/test.bin
-/test/main.s
+/test/*.elf
+/test/*.bin
+/test/*.s
