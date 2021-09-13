@@ -6,7 +6,7 @@
 //     implement: G = I M A F D Zicsr Zifencei
 //                    x x x     xxxxx
 //   - Implement the M extentions (done)
-//   - Implement the A extentions
+//   - Implement the A extentions (almost done)
 //   - Implement the F extentions
 //   - Implement the D extentions
 //   - Implement the Zifencei extentions

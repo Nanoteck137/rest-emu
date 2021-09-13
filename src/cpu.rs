@@ -6,6 +6,14 @@ const MAX_REGISTERS: usize = 33;
 const MAX_CSR_REGISTERS: usize = 4096;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
+pub enum PrivilegeLevel {
+    User,
+    Supervisor,
+    Reserved,
+    Machine,
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Register {
     Zero, // x0
     Ra,   // x1
@@ -176,6 +184,7 @@ pub enum CoreExit {
 pub struct Core {
     registers: [u64; MAX_REGISTERS],
     csr_registers: [u64; MAX_CSR_REGISTERS],
+    privilege_level: PrivilegeLevel,
 
     pub mmu: Mmu
 }
@@ -185,6 +194,7 @@ impl Core {
         Self {
             registers: [0; MAX_REGISTERS],
             csr_registers: [0; MAX_CSR_REGISTERS],
+            privilege_level: PrivilegeLevel::Machine,
 
             mmu
         }
