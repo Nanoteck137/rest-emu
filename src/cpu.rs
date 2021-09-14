@@ -178,23 +178,55 @@ impl From<u16> for Register {
 pub enum CoreExit {
     Success,
     Ecall,
-    Ebreak
+    Ebreak,
+}
+
+pub struct CoreStateFunctions {
+    pub write_csr: fn(&mut CoreState, csr: u16, value: u64),
+    pub read_csr: fn(&CoreState, csr: u16) -> u64,
+
+    pub write_privilege_level: fn(&mut CoreState, privilege_level: PrivilegeLevel),
+    pub read_privilege_level: fn(&CoreState) -> PrivilegeLevel,
+}
+
+pub struct CoreState {
+    pub csr_registers: [u64; MAX_CSR_REGISTERS],
+    pub privilege_level: PrivilegeLevel,
+
+    write_csr: fn(&mut CoreState, csr: u16, value: u64),
+    read_csr: fn(&CoreState, csr: u16) -> u64,
+
+    write_privilege_level: fn(&mut CoreState, privilege_level: PrivilegeLevel),
+    read_privilege_level: fn(&CoreState) -> PrivilegeLevel,
+}
+
+impl CoreState {
+    pub fn new(functions: CoreStateFunctions) -> Self {
+        Self {
+            csr_registers: [0; MAX_CSR_REGISTERS],
+            privilege_level: PrivilegeLevel::Machine,
+
+            write_csr: functions.write_csr,
+            read_csr: functions.read_csr,
+
+            write_privilege_level: functions.write_privilege_level,
+            read_privilege_level: functions.read_privilege_level,
+        }
+    }
 }
 
 pub struct Core {
     registers: [u64; MAX_REGISTERS],
-    csr_registers: [u64; MAX_CSR_REGISTERS],
-    privilege_level: PrivilegeLevel,
+    state: CoreState,
 
     pub mmu: Mmu
 }
 
 impl Core {
-    pub fn new(mmu: Mmu) -> Self {
+    pub fn new(state: CoreState, mmu: Mmu) -> Self {
         Self {
             registers: [0; MAX_REGISTERS],
-            csr_registers: [0; MAX_CSR_REGISTERS],
-            privilege_level: PrivilegeLevel::Machine,
+            state,
 
             mmu
         }
@@ -1594,25 +1626,21 @@ impl Core {
     }
 
     pub fn write_csr(&mut self, csr: u16, value: u64) {
-        let csr = csr as usize;
-
-        if csr >= MAX_CSR_REGISTERS {
+        if csr as usize >= MAX_CSR_REGISTERS {
             panic!("write_csr: csr address is over the max 4096 limit: {}",
                    csr);
         }
 
-        self.csr_registers[csr as usize] = value;
+        (self.state.write_csr)(&mut self.state, csr, value);
     }
 
     pub fn read_csr(&self, csr: u16) -> u64 {
-        let csr = csr as usize;
-
-        if csr >= MAX_CSR_REGISTERS {
+        if csr as usize >= MAX_CSR_REGISTERS {
             panic!("read_csr: csr address is over the max 4096 limit: {}",
                    csr);
         }
 
-        self.csr_registers[csr as usize]
+        (self.state.read_csr)(&self.state, csr)
     }
 
     fn fetch_u16(&mut self) -> u16 {

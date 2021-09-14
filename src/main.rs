@@ -17,6 +17,7 @@ mod cpu;
 
 use mmu::Mmu;
 use cpu::{ Core, Register };
+use cpu::{ CoreState, CoreStateFunctions, PrivilegeLevel };
 
 fn load_binary_program(mmu: &mut Mmu) {
     use std::fs::File;
@@ -34,6 +35,23 @@ fn load_binary_program(mmu: &mut Mmu) {
     }
 }
 
+fn custom_write_csr(core_state: &mut CoreState, csr: u16, value: u64) {
+    core_state.csr_registers[csr as usize] = value;
+}
+
+fn custom_read_csr(core_state: &CoreState, csr: u16) -> u64 {
+    core_state.csr_registers[csr as usize]
+}
+
+fn custom_write_privilege_level(core_state: &mut CoreState,
+                                privilege_level: PrivilegeLevel)
+{
+}
+
+fn custom_read_privilege_level(core_state: &CoreState) -> PrivilegeLevel {
+    core_state.privilege_level
+}
+
 fn main() {
     let mut mmu = Mmu::new(1 * 1024 * 1024);
     load_binary_program(&mut mmu);
@@ -44,7 +62,17 @@ fn main() {
     let entry = u64::from_str_radix(&entry[2..], 16)
         .expect("Failed to parse entry to int");
 
-    let mut core = Core::new(mmu);
+    let core_state_funcs = CoreStateFunctions {
+        write_csr: custom_write_csr,
+        read_csr: custom_read_csr,
+
+        write_privilege_level: custom_write_privilege_level,
+        read_privilege_level: custom_read_privilege_level,
+    };
+
+    let core_state = CoreState::new(core_state_funcs);
+
+    let mut core = Core::new(core_state, mmu);
     core.set_reg(Register::Pc, entry);
     core.set_reg(Register::Ra, 0xffff1337);
     core.set_reg(Register::Sp, 1 * 1024 * 1024);
@@ -57,6 +85,13 @@ fn main() {
     loop {
         let res = core.step();
         println!("Exit: {:#?}", res);
+
+        // TODO(patrik):
+        // check_devices_for_interrupts();
+        // check_interrupts();
+        // send_interrupt_to_core();
+
+        // core.trap(pc);
 
         if core.reg(Register::Pc) == 0xffff1337 {
             break;
